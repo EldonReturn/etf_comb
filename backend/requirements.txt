@@ -1,0 +1,29 @@
+# Web Framework
+fastapi
+uvicorn
+
+# Database ORM
+sqlalchemy
+aiosqlite
+
+# Data Processing
+pandas
+numpy
+
+# Financial Data
+akshare
+
+# Optimization
+scipy
+
+# Scheduler
+apscheduler
+
+# Testing
+pytest
+pytest-asyncio
+httpx
+
+# Utilities
+python-dotenv
+pydantic
