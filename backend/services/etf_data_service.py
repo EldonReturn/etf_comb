@@ -199,7 +199,7 @@ def _convert_klines_to_df(klines_data: Dict, code: str) -> pd.DataFrame:
             change_pct = (close - prev_close) / prev_close * 100
 
         rows.append({
-            "日期": pd.to_datetime(timestamps[i], unit="ms").strftime("%Y-%m-%d"),
+            "日期": pd.to_datetime(timestamps[i], unit="ms", utc=True).tz_convert("Asia/Shanghai").strftime("%Y-%m-%d"),
             "开盘": opens[i] if i < len(opens) else 0,
             "收盘": close,
             "最高": highs[i] if i < len(highs) else 0,
@@ -431,23 +431,13 @@ def save_etf_nav_to_db(session: Session, code: str, nav_df: pd.DataFrame) -> int
 
             nav_date = pd.to_datetime(nav_date_str).date()
 
-            existing = session.query(ETFNavHistory).filter(
-                ETFNavHistory.etf_code == code,
-                ETFNavHistory.nav_date == nav_date
-            ).first()
-
-            if existing:
-                existing.nav = close_price
-                existing.accum_nav = close_price
-            else:
-                nav_record = ETFNavHistory(
-                    etf_code=code,
-                    nav_date=nav_date,
-                    nav=close_price,
-                    accum_nav=close_price
-                )
-                session.add(nav_record)
-
+            nav_record = ETFNavHistory(
+                etf_code=code,
+                nav_date=nav_date,
+                nav=close_price,
+                accum_nav=close_price
+            )
+            session.add(nav_record)
             saved_count += 1
         except Exception as e:
             logger.warning(f"处理行情记录失败 (ETF: {code}): {e}")
@@ -553,6 +543,7 @@ def sync_all_etf_data(progress_callback=None) -> Dict[str, int]:
     stats = {"etf_count": 0, "nav_count": 0, "errors": 0}
 
     with get_session() as session:
+        clear_etf_data(session)
         etf_list = fetch_etf_list_from_em()
         save_etf_info_to_db(session, etf_list)
         stats["etf_count"] = len(etf_list)
