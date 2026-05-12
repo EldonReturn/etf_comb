@@ -7,7 +7,6 @@
 from backend.services.etf_data_service import (
     fetch_etf_list_from_em,
     fetch_etf_history,
-    sync_single_etf,
     sync_all_etf_data,
     get_etf_info_from_db,
     get_etf_history_from_db,
@@ -53,7 +52,6 @@ __all__ = [
     # 数据服务
     "fetch_etf_list_from_em",
     "fetch_etf_history",
-    "sync_single_etf",
     "sync_all_etf_data",
     "get_etf_info_from_db",
     "get_etf_history_from_db",

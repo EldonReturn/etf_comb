@@ -4,15 +4,13 @@ SQLite数据库连接管理单元测试
 本模块测试数据库连接管理的各项功能。
 
 测试覆盖：
-1. URL常量验证 - 同步/异步数据库URL格式
+1. URL常量验证 - 数据库URL格式
 2. 全局变量状态 - 引擎和会话工厂初始化状态
-3. get_engine() - 同步引擎单例模式
-4. get_async_engine() - 异步引擎单例模式
-5. init_session_factories() - 会话工厂初始化
-6. get_session() - 同步会话上下文管理器
-7. get_async_session() - 异步会话生成器
-8. ensure_data_dir() - 数据目录创建
-9. close_all_sessions() - 关闭所有会话
+3. get_engine() - 引擎单例模式
+4. init_session_factories() - 会话工厂初始化
+5. get_session() - 同步会话上下文管理器
+6. ensure_data_dir() - 数据目录创建
+7. close_all_sessions() - 关闭所有会话
 
 运行方式：
     pytest backend/tests/test_database.py -v
@@ -36,14 +34,8 @@ class TestDatabaseURLs:
     测试数据库URL常量
     """
 
-    def test_async_db_url_format(self):
-        """测试异步数据库URL格式"""
-        url = "sqlite+aiosqlite:///data/etf_database.db"
-        assert url.startswith("sqlite+aiosqlite:///")
-        assert "etf_database.db" in url
-
     def test_sync_db_url_format(self):
-        """测试同步数据库URL格式"""
+        """测试数据库URL格式"""
         url = "data/etf_database.db"
         assert url.endswith(".db")
         assert "etf_database" in url
@@ -51,7 +43,7 @@ class TestDatabaseURLs:
     def test_url_contains_data_directory(self):
         """测试URL包含数据目录"""
         url = "data/etf_database.db"
-        assert "data/" in url or url.startswith("sqlite+aiosqlite:///data/")
+        assert "data/" in url
 
 
 class TestGlobalVariables:
@@ -62,26 +54,18 @@ class TestGlobalVariables:
     def test_engine_initially_none(self):
         """测试引擎初始为None"""
         _engine = None
-        _async_engine = None
         assert _engine is None
-        assert _async_engine is None
 
     def test_session_factories_initially_none(self):
         """测试会话工厂初始为None"""
         SessionLocal = None
-        AsyncSessionLocal = None
         assert SessionLocal is None
-        assert AsyncSessionLocal is None
 
     def test_global_variables_can_be_modified(self):
         """测试全局变量可以被修改"""
         _engine = None
         _engine = "mock_engine"
         assert _engine == "mock_engine"
-
-        _async_engine = None
-        _async_engine = "mock_async_engine"
-        assert _async_engine == "mock_async_engine"
 
 
 class TestEnsureDataDir:
@@ -141,30 +125,20 @@ class TestCloseAllSessions:
     def test_close_sessions_with_none_engine(self):
         """测试关闭None引擎不报错"""
         _engine = None
-        _async_engine = None
 
         if _engine is not None:
             _engine.dispose()
             _engine = None
 
-        if _async_engine is not None:
-            import asyncio
-            asyncio.run(_async_engine.dispose())
-            _async_engine = None
-
         assert _engine is None
-        assert _async_engine is None
 
     def test_close_sessions_resets_to_none(self):
         """测试关闭后会话工厂重置为None"""
         SessionLocal = "mock_session"
-        AsyncSessionLocal = "mock_async_session"
 
         SessionLocal = None
-        AsyncSessionLocal = None
 
         assert SessionLocal is None
-        assert AsyncSessionLocal is None
 
 
 class TestSessionContextManager:
@@ -276,40 +250,6 @@ class TestSessionContextManager:
         assert SessionLocal == "initialized_factory"
 
 
-class TestAsyncSessionGenerator:
-    """
-    测试get_async_session异步生成器
-    """
-
-    def test_async_generator_protocol(self):
-        """测试异步生成器协议"""
-        class MockAsyncSession:
-            committed = False
-            rolled_back = False
-            closed = False
-
-            async def commit(self):
-                self.committed = True
-
-            async def rollback(self):
-                self.rolled_back = True
-
-            async def aclose(self):
-                self.closed = True
-
-        session = MockAsyncSession()
-
-        @contextmanager
-        def mock_get_async_session():
-            try:
-                yield session
-            finally:
-                pass
-
-        with mock_get_async_session() as s:
-            assert s is session
-
-
 class TestEngineCreation:
     """
     测试数据库引擎创建逻辑
@@ -336,13 +276,6 @@ class TestEngineCreation:
         assert params["pool_size"] == 5
         assert params["max_overflow"] == 10
         assert params["pool_pre_ping"] is True
-
-    def test_async_engine_url_format(self):
-        """测试异步引擎URL格式"""
-        url = "sqlite+aiosqlite:///data/etf_database.db"
-
-        assert url.startswith("sqlite+aiosqlite:///")
-        assert ".db" in url
 
     def test_singleton_pattern_logic(self):
         """测试单例模式逻辑"""

@@ -34,14 +34,12 @@ from backend.db.database import (
     ensure_data_dir,
     close_all_sessions,
     get_session,
-    AsyncSessionLocal,
 )
 from backend.db.models import create_database, ETFInfo, ETFNavHistory
 from backend.services import (
     get_etf_info_from_db,
     get_etf_history_from_db,
     sync_all_etf_data,
-    sync_single_etf,
     evaluate_portfolio,
     compare_portfolios,
     optimize_max_return,
@@ -69,7 +67,9 @@ async def lifespan(app: FastAPI):
     create_database()
     init_session_factories()
     logger.info("数据库初始化完成")
+
     yield
+
     logger.info("应用关闭中...")
     close_all_sessions()
     stop_scheduler()
@@ -87,7 +87,7 @@ app = FastAPI(
 - **组合评估**: 计算组合的收益率、夏普比率、最大回撤等指标
 - **组合对比**: 多组合并列比较
 - **最优组合**: 使用均值-方差优化寻找最大收益组合
-- **数据同步**: 从AkShare同步ETF数据到本地数据库
+- **数据同步**: 从TickFlow同步ETF数据到本地数据库
     """,
     version="1.0.0",
     lifespan=lifespan,

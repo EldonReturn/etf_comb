@@ -11,9 +11,8 @@ ETF数据服务模块单元测试
 5. save_etf_nav_to_db - 保存ETF历史行情到数据库
 6. get_etf_info_from_db - 从数据库获取ETF信息
 7. get_etf_history_from_db - 从数据库获取历史行情
-8. sync_single_etf - 同步单只ETF数据
-9. sync_all_etf_data - 同步所有ETF数据
-10. clear_etf_data - 清除ETF数据
+8. sync_all_etf_data - 同步所有ETF数据
+9. clear_etf_data - 清除ETF数据
 
 运行方式：
     pytest backend/tests/test_etf_data_service.py -v
@@ -159,7 +158,7 @@ class TestFetchETFListFromEM:
     """
     测试fetch_etf_list_from_em函数
 
-    注意：该函数依赖AkShare，需要mock
+    注意：该函数依赖TickFlow，需要mock
     """
 
     def test_fetch_etf_list_returns_dataframe(self):
@@ -197,7 +196,7 @@ class TestFetchETFHistory:
     """
     测试fetch_etf_history函数
 
-    注意：该函数依赖AkShare，需要mock
+    注意：该函数依赖TickFlow，需要mock
     """
 
     def test_fetch_etf_history_returns_dataframe(self):
@@ -482,37 +481,6 @@ class TestGetETFHistoryFromDB:
         assert dates == sorted(dates)
 
 
-class TestSyncSingleETF:
-    """
-    测试sync_single_etf函数
-    """
-
-    def test_sync_single_etf_returns_tuple(self):
-        """测试返回元组类型"""
-        result = (0, 0)
-        assert isinstance(result, tuple)
-        assert len(result) == 2
-
-    def test_sync_single_etf_tuple_content(self):
-        """测试元组内容"""
-        result = (1, 100)
-        assert result[0] == 1
-        assert result[1] == 100
-
-    def test_sync_single_etf_info_count(self):
-        """测试信息更新数"""
-        info_count = 0
-        nav_count = 100
-        assert isinstance(info_count, int)
-        assert isinstance(nav_count, int)
-
-    def test_sync_single_etf_nav_count(self):
-        """测试净值记录数"""
-        info_count = 0
-        nav_count = 250
-        assert nav_count >= 0
-
-
 class TestSyncAllETFData:
     """
     测试sync_all_etf_data函数
@@ -588,16 +556,16 @@ class TestClearETFData:
         assert result == 0
 
 
-class TestAkShareFieldMapping:
+class TestFieldMapping:
     """
-    测试AkShare字段映射
+    测试字段映射
 
-    验证数据从AkShare到数据库的映射关系是否正确
+    验证数据从TickFlow到数据库的映射关系是否正确
     """
 
-    def test_fund_etf_hist_em_to_nav_mapping(self):
+    def test_field_mapping_close_to_nav(self):
         """测试收盘价映射到nav"""
-        akshare_data = {
+        tickflow_data = {
             "日期": "2024-01-02",
             "收盘": 3.89,
             "开盘": 3.85,
@@ -605,20 +573,19 @@ class TestAkShareFieldMapping:
             "最低": 3.84
         }
 
-        nav = float(akshare_data.get("收盘", 0))
+        nav = float(tickflow_data.get("收盘", 0))
         assert nav == 3.89
 
-    def test_fund_etf_list_em_columns_mapping(self):
+    def test_field_mapping_etf_list_columns(self):
         """测试ETF列表字段映射"""
-        akshare_data = {
-            "基金代码": "510300",
-            "基金简称": "沪深300ETF",
-            "类型": "开放式",
-            "上市时间": "2012-05-28"
+        tickflow_data = {
+            "代码": "510300",
+            "名称": "沪深300ETF",
+            "交易所": "SH"
         }
 
-        code = str(akshare_data.get("基金代码", "")).strip()
-        name = str(akshare_data.get("基金简称", "")).strip()
+        code = str(tickflow_data.get("代码", "")).strip()
+        name = str(tickflow_data.get("名称", "")).strip()
 
         assert code == "510300"
         assert name == "沪深300ETF"

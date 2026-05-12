@@ -1,27 +1,28 @@
 """
 ETF数据服务模块
 
-本模块负责从AkShare获取ETF数据并存储到数据库。
+本模块负责从AkShare获取ETF列表，从TickFlow获取ETF历史数据。
 
 核心功能：
-1. fetch_etf_list(): 获取全量ETF列表
-2. fetch_etf_history(): 获取单只ETF历史行情
-3. sync_all_etf_data(): 批量同步所有ETF数据
+1. fetch_etf_list(): 获取全量ETF列表 (使用AkShare)
+2. fetch_etf_history(): 获取单只ETF历史行情 (使用TickFlow)
+3. sync_all_etf_data(): 批量同步所有ETF数据 (使用TickFlow批量接口)
 4. get_etf_history_from_db(): 从数据库读取历史行情
 
 数据来源：
-- ETF列表: akshare的fund_etf_spot_em() 获取东方财富ETF列表
-- 历史行情: akshare的fund_etf_hist_em() 获取ETF历史K线数据
+- ETF列表: AkShare的fund_etf_spot_em() 获取东方财富ETF列表
+- 历史行情: TickFlow的 /v1/klines/batch 获取ETF历史K线数据
 
 数据字段说明：
-- fund_etf_hist_em 返回的是市场交易价格，不是基金净值
-- 但对于投资组合的收益率计算，交易价格和净值效果相同
-- 收益率计算使用收盘价的日变化率
+- TickFlow 返回列式K线数据 (timestamp, open, high, low, close, volume, amount)
+- 使用前复权 (forward) 模式，保证历史价格稳定，适合量化回测
+- 收益率 = (今日收盘 - 昨日收盘) / 昨日收盘
 
 AkShare接口文档：https://akshare.akfamily.xyz/data/fund/fund_public.html
+TickFlow API文档：https://docs.tickflow.org
 
 作者: ETF组合系统
-版本: 1.1.0
+版本: 2.0.0
 """
 
 import logging
@@ -35,6 +36,13 @@ from sqlalchemy.orm import Session
 
 from backend.db.models import ETFInfo, ETFNavHistory
 from backend.db.database import get_session
+
+try:
+    from tickflow import TickFlow
+    _TICKFLOW_AVAILABLE = True
+except ImportError:
+    _TICKFLOW_AVAILABLE = False
+    logger.warning("TickFlow SDK 未安装，将使用 HTTP 请求模式")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -101,6 +109,34 @@ def determine_category(etf_name: str) -> str:
     return "宽基指数"
 
 
+def _get_exchange(code: str) -> str:
+    """
+    根据基金代码判断交易所
+
+    参数:
+        code: 基金代码，如 "510300" 或 "159915"
+
+    返回:
+        str: 交易所代码，SH（上证）或 SZ（深证）
+    """
+    if code.startswith("5"):
+        return "SH"
+    return "SZ"
+
+
+def _add_exchange_suffix(code: str) -> str:
+    """
+    给基金代码添加交易所后缀
+
+    参数:
+        code: 基金代码，如 "510300"
+
+    返回:
+        str: 带后缀的基金代码，如 "510300.SH"
+    """
+    return f"{code}.{_get_exchange(code)}"
+
+
 def fetch_etf_list_from_em() -> pd.DataFrame:
     """
     从东方财富获取ETF列表
@@ -134,26 +170,66 @@ def fetch_etf_list_from_em() -> pd.DataFrame:
         raise RuntimeError(f"获取ETF列表失败: {e}")
 
 
+def _get_tickflow_client():
+    """获取TickFlow客户端实例（免费模式）"""
+    if _TICKFLOW_AVAILABLE:
+        return TickFlow.free()
+    return None
+
+
+def _convert_klines_to_df(klines_data: Dict, code: str) -> pd.DataFrame:
+    """将TickFlow列式K线数据转换为行式DataFrame"""
+    timestamps = klines_data.get("timestamp", [])
+    if not timestamps:
+        return pd.DataFrame()
+
+    opens = klines_data.get("open", [])
+    closes = klines_data.get("close", [])
+    highs = klines_data.get("high", [])
+    lows = klines_data.get("low", [])
+    volumes = klines_data.get("volume", [])
+    amounts = klines_data.get("amount", [])
+
+    rows = []
+    prev_close = None
+    for i in range(len(timestamps)):
+        close = closes[i] if i < len(closes) else 0
+        change_pct = 0.0
+        if prev_close is not None and prev_close > 0:
+            change_pct = (close - prev_close) / prev_close * 100
+
+        rows.append({
+            "日期": pd.to_datetime(timestamps[i], unit="ms").strftime("%Y-%m-%d"),
+            "开盘": opens[i] if i < len(opens) else 0,
+            "收盘": close,
+            "最高": highs[i] if i < len(highs) else 0,
+            "最低": lows[i] if i < len(lows) else 0,
+            "成交量": volumes[i] if i < len(volumes) else 0,
+            "成交额": amounts[i] if i < len(amounts) else 0,
+            "涨跌幅": change_pct
+        })
+        prev_close = close
+
+    return pd.DataFrame(rows)
+
+
 def fetch_etf_history(code: str, period: str = "daily", start_date: Optional[str] = None,
                       end_date: Optional[str] = None) -> pd.DataFrame:
     """
     获取单只ETF的历史行情数据
 
-    使用AkShare的fund_etf_hist_em()获取ETF的历史K线数据。
-    数据包含日期、开盘价、收盘价、最高价、最低价、成交量、涨跌幅等信息。
+    使用TickFlow的批量K线接口获取单只ETF的历史K线数据。
+    数据包含日期、开盘价、收盘价、最高价、最低价、成交量等信息。
 
     注意：
-        - 使用后复权(hfq)模式，保证历史价格稳定，适合量化回测
-        - AkShare fund_etf_hist_em 返回的是市场交易价格，不是基金净值
-        - 后复权价格能准确反映包含分红的真实长期收益
+        - 使用前复权(forward)模式，保证历史价格稳定，适合量化回测
+        - TickFlow返回列式数据，需要转置为行式DataFrame
         - 收益率 = (今日收盘 - 昨日收盘) / 昨日收盘
 
     参数:
         code: ETF代码，如 "510300"
         period: 时间周期，可选值：
-            - "daily": 日线
-            - "weekly": 周线
-            - "monthly": 月线
+            - "daily": 日线 (对应TickFlow的1d)
         start_date: 起始日期，格式 "YYYYMMDD"，默认为一年前
         end_date: 结束日期，格式 "YYYYMMDD"，默认为今天
 
@@ -167,8 +243,6 @@ def fetch_etf_history(code: str, period: str = "daily", start_date: Optional[str
             - 成交量: 成交量
             - 成交额: 成交额
             - 涨跌幅: 日涨跌幅(%)
-            - 涨跌额: 日涨跌额
-            - 换手率: 换手率(%)
 
     异常:
         RuntimeError: 获取数据失败时抛出
@@ -179,25 +253,81 @@ def fetch_etf_history(code: str, period: str = "daily", start_date: Optional[str
                日期      开盘      收盘      最高      最低       成交量       成交额     涨跌幅
         0  2024-01-02  3.8765  3.8900  3.9100  3.8600  12345678  123456789  -0.35
     """
-    try:
-        if start_date is None:
-            start_date = (date.today() - timedelta(days=365)).strftime("%Y%m%d")
-        if end_date is None:
-            end_date = date.today().strftime("%Y%m%d")
+    tf = _get_tickflow_client()
+    if tf is None:
+        raise RuntimeError("TickFlow SDK未安装")
 
-        logger.info(f"正在获取ETF {code} 的历史数据 ({start_date} ~ {end_date})...")
-        df = ak.fund_etf_hist_em(
-            symbol=code,
-            period=period,
-            start_date=start_date,
-            end_date=end_date,
-            adjust="hfq"
-        )
+    try:
+        period_map = {"daily": "1d"}
+        tickflow_period = period_map.get(period, "1d")
+
+        logger.info(f"正在获取ETF {code} 的历史数据...")
+
+        klines = tf.klines.get(code, period=tickflow_period, count=500, adjust="forward")
+
+        kline_data = klines
+        df = _convert_klines_to_df(kline_data, code)
+
+        if start_date and end_date and not df.empty:
+            start_dt = pd.to_datetime(start_date, format="%Y%m%d")
+            end_dt = pd.to_datetime(end_date, format="%Y%m%d")
+            df["日期_dt"] = pd.to_datetime(df["日期"])
+            df = df[(df["日期_dt"] >= start_dt) & (df["日期_dt"] <= end_dt)]
+            df = df.drop("日期_dt", axis=1)
+
         logger.info(f"成功获取ETF {code} 的 {len(df)} 条历史记录")
         return df
     except Exception as e:
         logger.error(f"获取ETF {code} 历史数据失败: {e}")
         raise RuntimeError(f"获取ETF {code} 历史数据失败: {e}")
+
+
+def fetch_etf_history_batch(codes: List[str], period: str = "daily", count: int = 500) -> Dict[str, pd.DataFrame]:
+    """
+    批量获取多只ETF的历史行情数据
+
+    使用TickFlow的 /v1/klines/batch 一次请求获取多只ETF的历史K线数据。
+    这是同步多只ETF的推荐方式，比逐个调用 fetch_etf_history 更高效。
+
+    参数:
+        codes: ETF代码列表，如 ["510300", "510500"]
+        period: 时间周期，默认 "daily" (1d)
+        count: 返回的K线数量，默认500
+
+    返回:
+        Dict[str, pd.DataFrame]: 键为ETF代码，值为对应的历史数据DataFrame
+
+    示例:
+        >>> results = fetch_etf_history_batch(["510300", "510500"], count=250)
+        >>> for code, df in results.items():
+        >>>     print(f"{code}: {len(df)} records")
+    """
+    if not codes:
+        return {}
+
+    tf = _get_tickflow_client()
+    if tf is None:
+        raise RuntimeError("TickFlow SDK未安装")
+
+    try:
+        logger.info(f"正在批量获取{len(codes)}只ETF的历史数据...")
+
+        klines_dict = tf.klines.batch(codes, period="1d", count=count, adjust="forward")
+
+        results = {}
+        for symbol in codes:
+            if symbol not in klines_dict:
+                results[symbol] = pd.DataFrame()
+                continue
+
+            kline_data = klines_dict[symbol]
+            results[symbol] = _convert_klines_to_df(kline_data, symbol)
+
+        logger.info(f"批量获取完成，共处理{len(results)}只ETF")
+        return results
+    except Exception as e:
+        logger.error(f"批量获取ETF历史数据失败: {e}")
+        raise RuntimeError(f"批量获取ETF历史数据失败: {e}")
 
 
 def save_etf_info_to_db(session: Session, etf_list: pd.DataFrame) -> int:
@@ -232,7 +362,9 @@ def save_etf_info_to_db(session: Session, etf_list: pd.DataFrame) -> int:
         if not code or not name:
             continue
 
-        existing = session.query(ETFInfo).filter(ETFInfo.code == code).first()
+        full_code = _add_exchange_suffix(code)
+
+        existing = session.query(ETFInfo).filter(ETFInfo.code == full_code).first()
 
         if existing:
             existing.name = name
@@ -240,7 +372,7 @@ def save_etf_info_to_db(session: Session, etf_list: pd.DataFrame) -> int:
             existing.updated_at = now
         else:
             etf_info = ETFInfo(
-                code=code,
+                code=full_code,
                 name=name,
                 category=determine_category(name),
                 updated_at=now
@@ -263,10 +395,10 @@ def save_etf_nav_to_db(session: Session, code: str, nav_df: pd.DataFrame) -> int
     参数:
         session: 数据库会话
         code: ETF代码
-        nav_df: AkShare fund_etf_hist_em 返回的DataFrame，字段映射如下：
+        nav_df: TickFlow返回的DataFrame，字段映射如下：
             - 日期 -> nav_date (交易日期)
             - 收盘 -> nav (收盘价/单位净值，用于计算收益率)
-            - 收盘 -> accum_nav (后复权收盘价=累计净值，反映真实长期收益)
+            - 收盘 -> accum_nav (前复权收盘价=累计净值，反映真实长期收益)
             - 涨跌幅 -> change_pct (日涨跌幅，百分比)
             - 成交量 -> volume (成交量)
             - 成交额 -> amount (成交额)
@@ -275,9 +407,9 @@ def save_etf_nav_to_db(session: Session, code: str, nav_df: pd.DataFrame) -> int
         int: 成功保存的行情记录数
 
     注意:
-        - AkShare fund_etf_hist_em 返回的是市场交易价格，不是基金净值
-        - 使用 adjust="hfq" 后复权模式，收盘价即为反映分红再投资的累计净值
-        - nav 和 accum_nav 在当前数据源下均为后复权收盘价
+        - TickFlow 使用 adjust=forward 前复权模式
+        - 前复权收盘价即为反映分红再投资的累计净值
+        - nav 和 accum_nav 在当前数据源下均为前复权收盘价
         - DataFrame中的日期列需要能够转换为date对象
     """
     saved_count = 0
@@ -352,7 +484,7 @@ def get_etf_info_from_db(session: Session) -> List[Dict]:
     ]
 
 
-def get_etf_history_from_db(session: Session, code: str, 
+def get_etf_history_from_db(session: Session, code: str,
                               start_date: Optional[date] = None,
                               end_date: Optional[date] = None) -> List[Dict]:
     """
@@ -390,45 +522,14 @@ def get_etf_history_from_db(session: Session, code: str,
     ]
 
 
-def sync_single_etf(session: Session, code: str) -> Tuple[int, int]:
-    """
-    同步单只ETF的数据（基本信息 + 历史净值）
-
-    依次获取ETF的基本信息和最近1年的历史净值，
-    并保存到数据库。
-
-    参数:
-        session: 数据库会话
-        code: ETF代码
-
-    返回:
-        Tuple[int, int]: (基本信息更新数, 净值记录更新数)
-
-    示例:
-        >>> with get_session() as session:
-        >>>     info_count, nav_count = sync_single_etf(session, "510300")
-    """
-    info_count = 0
-    nav_count = 0
-
-    try:
-        df = fetch_etf_history(code)
-        if df is not None and not df.empty:
-            nav_count = save_etf_nav_to_db(session, code, df)
-    except Exception as e:
-        logger.error(f"同步ETF {code} 历史数据失败: {e}")
-
-    return info_count, nav_count
-
-
 def sync_all_etf_data(progress_callback=None) -> Dict[str, int]:
     """
     同步所有ETF数据（完整流程）
 
     完整的数据同步流程：
-    1. 从东方财富获取ETF列表
+    1. 从TickFlow获取ETF列表
     2. 保存ETF基本信息到数据库
-    3. 遍历每只ETF获取并保存历史净值
+    3. 使用批量接口获取并保存所有ETF历史净值
 
     参数:
         progress_callback: 进度回调函数，签名为 callback(current, total, message)
@@ -456,19 +557,28 @@ def sync_all_etf_data(progress_callback=None) -> Dict[str, int]:
         save_etf_info_to_db(session, etf_list)
         stats["etf_count"] = len(etf_list)
 
-    etf_codes = etf_list["代码"].astype(str).tolist()
+    etf_codes = [_add_exchange_suffix(c) for c in etf_list["代码"].astype(str).tolist()]
     total = len(etf_codes)
+
+    batch_results = fetch_etf_history_batch(etf_codes, count=500)
 
     with get_session() as session:
         for i, code in enumerate(etf_codes):
-            try:
-                if progress_callback and callable(progress_callback):
-                    progress_callback(i + 1, total, f"同步ETF {code}")
+            if progress_callback and callable(progress_callback):
+                progress_callback(i + 1, total, f"保存ETF {code}")
 
-                _, nav_count = sync_single_etf(session, code)
-                stats["nav_count"] += nav_count
-            except Exception as e:
-                logger.error(f"同步ETF {code} 失败: {e}")
+            if code in batch_results:
+                df = batch_results[code]
+                if df is not None and not df.empty:
+                    try:
+                        nav_count = save_etf_nav_to_db(session, code, df)
+                        stats["nav_count"] += nav_count
+                    except Exception as e:
+                        logger.error(f"保存ETF {code} 数据失败: {e}")
+                        stats["errors"] += 1
+                else:
+                    stats["errors"] += 1
+            else:
                 stats["errors"] += 1
 
     return stats

@@ -9,14 +9,11 @@
 
 from backend.db.database import (
     get_engine,
-    get_async_engine,
     get_session,
-    get_async_session,
     init_session_factories,
     ensure_data_dir,
     close_all_sessions,
     SessionLocal,
-    AsyncSessionLocal,
 )
 
 from backend.db.models import (
@@ -30,14 +27,11 @@ from backend.db.models import (
 __all__ = [
     # 数据库连接管理
     "get_engine",
-    "get_async_engine",
     "get_session",
-    "get_async_session",
     "init_session_factories",
     "ensure_data_dir",
     "close_all_sessions",
     "SessionLocal",
-    "AsyncSessionLocal",
     # ORM模型
     "Base",
     "ETFInfo",

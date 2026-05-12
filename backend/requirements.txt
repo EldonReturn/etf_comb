@@ -12,6 +12,7 @@ numpy
 
 # Financial Data
 akshare
+tickflow
 
 # Optimization
 scipy
