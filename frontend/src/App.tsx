@@ -25,7 +25,7 @@ function App() {
   useEffect(() => {
     const checkStatus = async () => {
       try {
-        const response = await fetch('/api/../');
+        const response = await fetch('/health');
         if (response.ok) {
           const data = await response.json();
           setSystemStatus(data.status || 'running');
@@ -66,7 +66,7 @@ function App() {
         <div className="header-status">
           <span className={`status-indicator ${systemStatus}`} />
           <span className="status-text">
-            {systemStatus === 'running' ? '系统正常' : systemStatus === 'disconnected' ? '未连接后端' : systemStatus}
+            {systemStatus === 'running' || systemStatus === 'healthy' ? '系统正常' : systemStatus === 'disconnected' ? '未连接后端' : systemStatus}
           </span>
         </div>
       </header>

@@ -453,29 +453,32 @@ def evaluate_portfolio(weights: Dict[str, float],
 
         etf_metrics = {}
         for i, code in enumerate(etf_codes):
-            if len(normalized_navs_list[i]) >= 2:
-                etf_returns = calculate_returns_from_nav(normalized_navs_list[i])
-                etf_total_ret = (normalized_navs_list[i][-1] - normalized_navs_list[i][0]) / normalized_navs_list[i][0]
-                etf_ann_ret = calculate_annualized_return(etf_total_ret, len(normalized_navs_list[i]))
-                etf_vol = calculate_volatility(etf_returns)
-                etf_sharpe = calculate_sharpe_ratio(etf_ann_ret, etf_vol)
-                etf_mdd, _ = calculate_max_drawdown(normalized_navs_list[i])
+            if i >= len(normalized_navs_list) or len(normalized_navs_list[i]) < 2:
+                continue
 
-                etf_info = session.query(ETFNavHistory).filter(
-                    ETFNavHistory.etf_code == code
-                ).first()
-                name = etf_info.etf_info.name if etf_info else code
+            nav_data = normalized_navs_list[i]
+            etf_returns = calculate_returns_from_nav(nav_data)
+            etf_total_ret = (nav_data[-1] - nav_data[0]) / nav_data[0]
+            etf_ann_ret = calculate_annualized_return(etf_total_ret, len(nav_data))
+            etf_vol = calculate_volatility(etf_returns)
+            etf_sharpe = calculate_sharpe_ratio(etf_ann_ret, etf_vol)
+            etf_mdd, _ = calculate_max_drawdown(nav_data)
 
-                etf_metrics[code] = {
-                    "code": code,
-                    "name": name,
-                    "weight": etf_weights[i],
-                    "total_return": etf_total_ret * 100,
-                    "annualized_return": etf_ann_ret * 100,
-                    "volatility": etf_vol * 100,
-                    "sharpe_ratio": etf_sharpe,
-                    "max_drawdown": etf_mdd * 100
-                }
+            etf_info = session.query(ETFNavHistory).filter(
+                ETFNavHistory.etf_code == code
+            ).first()
+            name = etf_info.etf_info.name if etf_info else code
+
+            etf_metrics[code] = {
+                "code": code,
+                "name": name,
+                "weight": etf_weights[i],
+                "total_return": etf_total_ret * 100,
+                "annualized_return": etf_ann_ret * 100,
+                "volatility": etf_vol * 100,
+                "sharpe_ratio": etf_sharpe,
+                "max_drawdown": etf_mdd * 100
+            }
 
         return {
             "total_return": metrics.total_return,
