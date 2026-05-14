@@ -58,6 +58,13 @@ export function ETFSelector({ selectedETFs, onChange }: ETFSelectorProps) {
     const newWeights = { ...selectedETFs };
     if (newWeights[code]) {
       delete newWeights[code];
+      const remainingKeys = Object.keys(newWeights);
+      if (remainingKeys.length > 0) {
+        const total = Object.values(newWeights).reduce((a, b) => a + b, 0);
+        remainingKeys.forEach((k) => {
+          newWeights[k] = newWeights[k] / total;
+        });
+      }
     } else {
       newWeights[code] = 1 / (Object.keys(selectedETFs).length + 1);
       const otherCount = Object.keys(newWeights).length - 1;
