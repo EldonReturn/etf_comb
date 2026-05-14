@@ -103,9 +103,10 @@ export function PortfolioCard({ weights, id, name }: PortfolioCardProps) {
     const xLabels = [];
     const formatDate = (dateStr: string) => {
       const date = new Date(dateStr);
-      const month = date.getMonth() + 1;
-      const day = date.getDate();
-      return `${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+      const yy = date.getFullYear().toString().slice(2);
+      const mm = (date.getMonth() + 1).toString().padStart(2, '0');
+      const dd = date.getDate().toString().padStart(2, '0');
+      return `${yy}${mm}${dd}`;
     };
     if (navData.length > 0) {
       const totalLen = navData.length - 1 || 1;
@@ -219,9 +220,10 @@ export function PortfolioCard({ weights, id, name }: PortfolioCardProps) {
     const xLabels = [];
     const formatDate = (dateStr: string) => {
       const date = new Date(dateStr);
-      const month = date.getMonth() + 1;
-      const day = date.getDate();
-      return `${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+      const yy = date.getFullYear().toString().slice(2);
+      const mm = (date.getMonth() + 1).toString().padStart(2, '0');
+      const dd = date.getDate().toString().padStart(2, '0');
+      return `${yy}${mm}${dd}`;
     };
     if (drawdownData.length > 0) {
       if (drawdownData.length === 1) {
