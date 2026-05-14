@@ -50,7 +50,7 @@ from backend.services import (
     get_scheduler_status,
 )
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
@@ -340,7 +340,9 @@ async def sync_etf_data():
         SyncResponse: 同步统计信息
     """
     try:
+        logger.info("开始手动触发ETF数据全量同步")
         stats = sync_all_etf_data()
+        logger.info("手动触发ETF数据全量同步完成")
         return SyncResponse(
             status="completed",
             etf_count=stats["etf_count"],

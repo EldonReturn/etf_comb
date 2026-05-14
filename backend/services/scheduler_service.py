@@ -25,7 +25,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from backend.services.etf_data_service import sync_all_etf_data
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 scheduler = BackgroundScheduler()

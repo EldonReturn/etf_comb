@@ -17,7 +17,8 @@ from typing import List, Optional
 
 from sqlalchemy import (
     String, Date, DateTime, Numeric, Integer,
-    ForeignKey, UniqueConstraint, Index, create_engine
+    ForeignKey, UniqueConstraint, Index, create_engine,
+    PrimaryKeyConstraint
 )
 from sqlalchemy.orm import (
     DeclarativeBase, Mapped, mapped_column,
@@ -99,7 +100,6 @@ class ETFNavHistory(Base):
     通过(etf_code, nav_date)唯一索引确保同一天只有一条记录。
 
     属性说明：
-    - id: 自增主键
     - etf_code: ETF代码，外键关联到etf_info表的code字段
     - nav_date: 净值日期
     - nav: 单位净值（也称为单位份额净值），反映每份基金的价值
@@ -112,16 +112,11 @@ class ETFNavHistory(Base):
     """
     __tablename__ = "etf_nav_history"
 
-    id: Mapped[int] = mapped_column(
-        Integer,
-        primary_key=True,
-        autoincrement=True,
-        comment="自增主键"
-    )
     etf_code: Mapped[str] = mapped_column(
         String(10),
         ForeignKey("etf_info.code", ondelete="CASCADE"),
         nullable=False,
+        index=True,
         comment="ETF代码，外键"
     )
     nav_date: Mapped[date] = mapped_column(
@@ -153,9 +148,9 @@ class ETFNavHistory(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint(
+        PrimaryKeyConstraint(
             'etf_code', 'nav_date',
-            name='uix_etf_code_nav_date'
+            name='pk_etf_nav_history'
         ),
         Index(
             'ix_etf_code_nav_date',
@@ -217,6 +212,6 @@ def drop_database(db_path: str = "data/etf_database.db") -> None:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     create_database()
     print("数据库创建成功！")

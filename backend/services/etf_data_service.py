@@ -44,7 +44,7 @@ except ImportError:
     _TICKFLOW_AVAILABLE = False
     logger.warning("TickFlow SDK 未安装，将使用 HTTP 请求模式")
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
@@ -352,37 +352,29 @@ def save_etf_info_to_db(session: Session, etf_list: pd.DataFrame) -> int:
         >>>     count = save_etf_info_to_db(session, df)
         >>>     print(f"保存了{count}只ETF")
     """
-    saved_count = 0
     now = datetime.utcnow()
+    mappings = []
 
-    for _, row in etf_list.iterrows():
-        code = str(row.get("代码", "")).strip()
-        name = str(row.get("名称", "")).strip()
+    for row in etf_list.itertuples(index=False):
+        code = str(row.代码).strip() if hasattr(row, '代码') else str(getattr(row, 0, "")).strip()
+        name = str(row.名称).strip() if hasattr(row, '名称') else str(getattr(row, 1, "")).strip()
 
         if not code or not name:
             continue
 
         full_code = _add_exchange_suffix(code)
+        mappings.append({
+            "code": full_code,
+            "name": name,
+            "category": determine_category(name),
+            "updated_at": now
+        })
 
-        existing = session.query(ETFInfo).filter(ETFInfo.code == full_code).first()
+    if mappings:
+        session.bulk_insert_mappings(ETFInfo, mappings)
+        session.commit()
 
-        if existing:
-            existing.name = name
-            existing.category = determine_category(name)
-            existing.updated_at = now
-        else:
-            etf_info = ETFInfo(
-                code=full_code,
-                name=name,
-                category=determine_category(name),
-                updated_at=now
-            )
-            session.add(etf_info)
-
-        saved_count += 1
-
-    session.commit()
-    return saved_count
+    return len(mappings)
 
 
 def save_etf_nav_to_db(session: Session, code: str, nav_df: pd.DataFrame) -> int:
@@ -412,39 +404,33 @@ def save_etf_nav_to_db(session: Session, code: str, nav_df: pd.DataFrame) -> int
         - nav 和 accum_nav 在当前数据源下均为前复权收盘价
         - DataFrame中的日期列需要能够转换为date对象
     """
-    saved_count = 0
+    mappings = []
 
-    for _, row in nav_df.iterrows():
+    for row in nav_df.itertuples(index=False):
         try:
-            nav_date_str = str(row.get("日期", ""))
+            nav_date_str = str(row.日期) if hasattr(row, '日期') else ""
 
-            close_price = float(row.get("收盘", 0))
-            open_price = float(row.get("开盘", close_price))
-            high_price = float(row.get("最高", close_price))
-            low_price = float(row.get("最低", close_price))
-            change_pct = float(row.get("涨跌幅", 0))
-            volume = float(row.get("成交量", 0))
-            amount = float(row.get("成交额", 0))
+            close_price = float(getattr(row, '收盘', 0) if hasattr(row, '收盘') else 0)
 
             if not nav_date_str or close_price <= 0:
                 continue
 
             nav_date = pd.to_datetime(nav_date_str).date()
-
-            nav_record = ETFNavHistory(
-                etf_code=code,
-                nav_date=nav_date,
-                nav=close_price,
-                accum_nav=close_price
-            )
-            session.add(nav_record)
-            saved_count += 1
+            mappings.append({
+                "etf_code": code,
+                "nav_date": nav_date,
+                "nav": close_price,
+                "accum_nav": close_price
+            })
         except Exception as e:
             logger.warning(f"处理行情记录失败 (ETF: {code}): {e}")
             continue
 
-    session.commit()
-    return saved_count
+    if mappings:
+        session.bulk_insert_mappings(ETFNavHistory, mappings)
+        session.commit()
+
+    return len(mappings)
 
 
 def get_etf_info_from_db(session: Session) -> List[Dict]:
