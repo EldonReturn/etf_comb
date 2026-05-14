@@ -551,7 +551,13 @@ def sync_all_etf_data(progress_callback=None) -> Dict[str, int]:
     etf_codes = [_add_exchange_suffix(c) for c in etf_list["代码"].astype(str).tolist()]
     total = len(etf_codes)
 
-    batch_results = fetch_etf_history_batch(etf_codes, count=500)
+    batch_size = 500
+    batch_results = {}
+    for i in range(0, total, batch_size):
+        batch_codes = etf_codes[i:i + batch_size]
+        logger.info(f"正在获取第{i // batch_size + 1}批, 共{(total + batch_size - 1) // batch_size}批, 代码数: {len(batch_codes)}")
+        batch_data = fetch_etf_history_batch(batch_codes, count=500)
+        batch_results.update(batch_data)
 
     with get_session() as session:
         for i, code in enumerate(etf_codes):
