@@ -90,17 +90,76 @@ export function PortfolioCard({ weights, id, name }: PortfolioCardProps) {
       value: nav,
     }));
 
-    const maxNav = Math.max(...navData.map((d) => d.value));
-    const minNav = Math.min(...navData.map((d) => d.value));
-    const normalizedData = navData.map((d) => ({
-      ...d,
-      value: ((d.value - minNav) / (maxNav - minNav || 1)) * 100,
+    const benchmarkNavData = (metrics.benchmark_nav_series || []).map((nav, index) => ({
+      index,
+      value: nav,
     }));
 
+    const maxNav = Math.max(...navData.map((d) => d.value));
+    const minNav = Math.min(...navData.map((d) => d.value));
+    const valueRange = maxNav - minNav || 1;
+
+    const xLabels = [];
+    const step = Math.ceil(navData.length / 5);
+    for (let i = 0; i < navData.length; i += step) {
+      xLabels.push({ index: i, label: `${i + 1}` });
+    }
+    if (xLabels[xLabels.length - 1]?.index !== navData.length - 1) {
+      xLabels[xLabels.length - 1] = { index: navData.length - 1, label: `${navData.length}` };
+    }
+
+    const yLabels = [];
+    for (let i = 0; i <= 4; i++) {
+      const value = minNav + (valueRange * i) / 4;
+      yLabels.push({ value: value.toFixed(2), y: 190 - (i / 4) * 170 });
+    }
+
+    const rightYLabels = [];
+    const excessValues = navData.map((d, i) => {
+      const benchmarkValue = benchmarkNavData[i]?.value || d.value;
+      return d.value - benchmarkValue;
+    });
+    const maxExcess = Math.max(...excessValues);
+    const minExcess = Math.min(...excessValues);
+    const excessRange = Math.max(Math.abs(maxExcess), Math.abs(minExcess), 0.01);
+    for (let i = 0; i <= 4; i++) {
+      const pct = (-excessRange + (excessRange * 2 * i) / 4) * 100;
+      rightYLabels.push({ value: `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`, y: 190 - (i / 4) * 170 });
+    }
+
     return (
-      <svg viewBox="0 0 400 150" className="chart-svg">
+      <svg viewBox="0 0 500 220" className="chart-svg">
+        <line x1="50" y1="15" x2="50" y2="190" stroke="var(--border)" strokeWidth="1" />
+        <line x1="50" y1="190" x2="490" y2="190" stroke="var(--border)" strokeWidth="1" />
+        {xLabels.map(({ index, label }) => (
+          <g key={index}>
+            <line x1="50 + (index / (navData.length - 1)) * 440" y1="190" x2="50 + (index / (navData.length - 1)) * 440" y2="193" stroke="var(--border)" strokeWidth="1" />
+            <text x="50 + (index / (navData.length - 1)) * 440" y="205" fontSize="10" fill="var(--text-light)" textAnchor="middle">{label}</text>
+          </g>
+        ))}
+        {yLabels.map(({ value, y }) => (
+          <g key={y}>
+            <line x1="47" y1={y} x2="50" y2={y} stroke="var(--border)" strokeWidth="1" />
+            <text x="45" y={y + 4} fontSize="10" fill="var(--text-light)" textAnchor="end">{value}</text>
+          </g>
+        ))}
+        {rightYLabels.map(({ value, y }) => (
+          <g key={y}>
+            <line x1="490" y1={y} x2="493" y2={y} stroke="var(--border)" strokeWidth="1" />
+            <text x="497" y={y + 4} fontSize="10" fill="var(--text-light)" textAnchor="start">{value}</text>
+          </g>
+        ))}
+        {benchmarkNavData.length > 0 && (
+          <polyline
+            points={benchmarkNavData.map((d) => `${50 + (d.index / (navData.length - 1)) * 440},${190 - ((d.value - minNav) / valueRange) * 170}`).join(' ')}
+            fill="none"
+            stroke="#95a5a6"
+            strokeWidth="1"
+            strokeDasharray="4,2"
+          />
+        )}
         <polyline
-          points={normalizedData.map((d) => `${(d.index / (navData.length - 1)) * 380 + 10},${150 - d.value}`).join(' ')}
+          points={navData.map((d) => `${50 + (d.index / (navData.length - 1)) * 440},${190 - ((d.value - minNav) / valueRange) * 170}`).join(' ')}
           fill="none"
           stroke="#3498db"
           strokeWidth="2"
@@ -127,15 +186,40 @@ export function PortfolioCard({ weights, id, name }: PortfolioCardProps) {
     }
 
     const maxDD = Math.min(...drawdownData.map((d) => d.value));
-    const normalizedData = drawdownData.map((d) => ({
-      ...d,
-      value: d.value - maxDD,
-    }));
+
+    const xLabels = [];
+    const step = Math.ceil(drawdownData.length / 5);
+    for (let i = 0; i < drawdownData.length; i += step) {
+      xLabels.push({ index: i, label: `${i + 1}` });
+    }
+    if (xLabels[xLabels.length - 1]?.index !== drawdownData.length - 1) {
+      xLabels[xLabels.length - 1] = { index: drawdownData.length - 1, label: `${drawdownData.length}` };
+    }
+
+    const yLabels = [];
+    for (let i = 0; i <= 4; i++) {
+      const value = ((Math.abs(maxDD) * i) / 4).toFixed(1);
+      yLabels.push({ value, y: 190 - (i / 4) * 170 });
+    }
 
     return (
-      <svg viewBox="0 0 400 150" className="chart-svg">
+      <svg viewBox="0 0 500 220" className="chart-svg">
+        <line x1="50" y1="15" x2="50" y2="190" stroke="var(--border)" strokeWidth="1" />
+        <line x1="50" y1="190" x2="490" y2="190" stroke="var(--border)" strokeWidth="1" />
+        {xLabels.map(({ index, label }) => (
+          <g key={index}>
+            <line x1="50 + (index / (drawdownData.length - 1)) * 440" y1="190" x2="50 + (index / (drawdownData.length - 1)) * 440" y2="193" stroke="var(--border)" strokeWidth="1" />
+            <text x="50 + (index / (drawdownData.length - 1)) * 440" y="205" fontSize="10" fill="var(--text-light)" textAnchor="middle">{label}</text>
+          </g>
+        ))}
+        {yLabels.map(({ value, y }) => (
+          <g key={y}>
+            <line x1="47" y1={y} x2="50" y2={y} stroke="var(--border)" strokeWidth="1" />
+            <text x="45" y={y + 4} fontSize="10" fill="var(--text-light)" textAnchor="end">{value}%</text>
+          </g>
+        ))}
         <polyline
-          points={normalizedData.map((d) => `${(d.index / (drawdownData.length - 1)) * 380 + 10},${150 - Math.max(0, d.value)}`).join(' ')}
+          points={drawdownData.map((d) => `${50 + (d.index / (drawdownData.length - 1)) * 440},${190 - (Math.abs(d.value) / Math.abs(maxDD || 1)) * 170}`).join(' ')}
           fill="none"
           stroke="#e74c3c"
           strokeWidth="2"

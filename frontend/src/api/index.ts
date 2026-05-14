@@ -53,6 +53,7 @@ export interface PortfolioMetrics {
   max_drawdown: number;
   holding_period: number;
   nav_series: number[];
+  benchmark_nav_series: number[];
   daily_returns: number[];
   etf_metrics: Record<string, ETFFMetrics>;
 }

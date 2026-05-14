@@ -437,7 +437,10 @@ def evaluate_portfolio(weights: Dict[str, float],
                 "etf_metrics": {}
             }
 
-        min_len = min(len(navs) for navs in etf_navs_list)
+        benchmark_navs = get_etf_nav_series(session, "510350.SH") if len(weights) > 0 else []
+        min_len = min(len(navs) for navs in etf_navs_list) if etf_navs_list else 0
+        benchmark_navs = benchmark_navs[-min_len:] if len(benchmark_navs) > min_len else benchmark_navs
+
         normalized_navs_list = [navs[-min_len:] for navs in etf_navs_list]
 
         portfolio_navs = []
@@ -488,6 +491,7 @@ def evaluate_portfolio(weights: Dict[str, float],
             "max_drawdown": metrics.max_drawdown,
             "holding_period": metrics.holding_period,
             "nav_series": metrics.nav_series,
+            "benchmark_nav_series": benchmark_navs,
             "daily_returns": metrics.daily_returns,
             "etf_metrics": etf_metrics
         }
