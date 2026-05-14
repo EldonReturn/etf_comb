@@ -172,11 +172,11 @@ export function ETFSelector({ selectedETFs, onChange }: ETFSelectorProps) {
         </div>
       </div>
 
-      {selectedCodes.length > 0 && (
-        <div className="selected-section">
-          <h4>已选组合 ({selectedCodes.length}只)</h4>
-          <div className="selected-list">
-            {selectedCodes.map((code) => {
+      <div className="selected-section">
+        <h4>已选组合 ({selectedCodes.length}只)</h4>
+        <div className="selected-list">
+          {selectedCodes.length > 0 ? (
+            selectedCodes.map((code) => {
               const etf = etfList.find((e) => e.code === code);
               return (
                 <div key={code} className="selected-item">
@@ -194,10 +194,12 @@ export function ETFSelector({ selectedETFs, onChange }: ETFSelectorProps) {
                   </button>
                 </div>
               );
-            })}
-          </div>
+            })
+          ) : (
+            <div className="selected-empty">暂无选择，请在上方列表中点击ETF进行选择</div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

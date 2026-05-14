@@ -535,7 +535,7 @@ describe('PortfolioCard 组件', () => {
 // ======================================================================
 
 describe('OptimizerPanel 组件', () => {
-  const mockAvailableETFs = ['510300.SH', '510500.SH', '159915.SZ', '510880.SH'];
+  const mockAvailableETFs = mockETFList.etfs;
 
   it('应渲染可勾选ETF列表', () => {
     render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} />);
@@ -543,7 +543,7 @@ describe('OptimizerPanel 组件', () => {
     const checkboxes = screen.getAllByRole('checkbox');
     expect(checkboxes).toHaveLength(4);
     checkboxes.forEach((cb, i) => {
-      expect(cb.parentElement).toHaveTextContent(mockAvailableETFs[i]);
+      expect(cb.parentElement).toHaveTextContent(mockAvailableETFs[i].code);
     });
   });
 
@@ -1017,7 +1017,7 @@ describe('边界条件', () => {
     const fetchSpy = vi.fn().mockResolvedValueOnce(mockFetchSuccess(mockOptimizationResult));
     globalThis.fetch = fetchSpy as unknown as typeof fetch;
 
-    render(<OptimizerPanel availableETFs={['510300.SH', '510500.SH']} onOptimized={onOptimized} />);
+    render(<OptimizerPanel availableETFs={mockETFList.etfs.slice(0, 2)} onOptimized={onOptimized} />);
 
     const inputs = screen.getAllByRole('spinbutton');
     fireEvent.change(inputs[0], { target: { value: '30' } });
@@ -1080,7 +1080,7 @@ describe('可访问性', () => {
   });
 
   it('优化按钮禁用时应为disabled状态', () => {
-    render(<OptimizerPanel availableETFs={['510300.SH']} onOptimized={vi.fn()} />);
+    render(<OptimizerPanel availableETFs={mockETFList.etfs.slice(0, 1)} onOptimized={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: '开始优化' })).toBeDisabled();
   });

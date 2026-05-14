@@ -564,6 +564,13 @@ def sync_all_etf_data(progress_callback=None) -> Dict[str, int]:
             else:
                 stats["errors"] += 1
 
+        session.query(ETFInfo).filter(
+            ~ETFInfo.code.in_(
+                session.query(ETFNavHistory.etf_code).distinct()
+            )
+        ).delete(synchronize_session=False)
+        session.commit()
+
     return stats
 
 

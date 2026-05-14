@@ -1,22 +1,10 @@
-import { useState } from 'react';
-import type { OptimizationResult, Weights } from '../api';
+import { useState, useMemo } from 'react';
+import type { ETFInfo, OptimizationResult, Weights } from '../api';
 
-/**
- * OptimizerPanel - 最优组合优化面板组件
- *
- * 功能：
- * - 选择用于优化的ETF范围
- * - 设置优化约束条件
- * - 触发优化计算
- * - 显示最优组合结果
- *
- * Props:
- * - availableETFs: 可选的ETF代码列表
- * - onOptimized: 最优组合结果回调
- */
+const CATEGORIES = ['全部', '宽基指数', '行业指数', '债券', '商品', '境外'];
 
 interface OptimizerPanelProps {
-  availableETFs: string[];
+  availableETFs: ETFInfo[];
   onOptimized: (weights: Weights) => void;
 }
 
@@ -27,6 +15,19 @@ export function OptimizerPanel({ availableETFs, onOptimized }: OptimizerPanelPro
   const [optimizing, setOptimizing] = useState(false);
   const [result, setResult] = useState<OptimizationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [category, setCategory] = useState('全部');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredETFs = useMemo(() => {
+    return availableETFs.filter((etf) => {
+      const matchCategory = category === '全部' || etf.category === category;
+      const matchSearch =
+        !searchTerm ||
+        etf.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        etf.name.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchCategory && matchSearch;
+    });
+  }, [availableETFs, category, searchTerm]);
 
   const handleETFChange = (code: string) => {
     setSelectedETFs((prev) => {
@@ -38,10 +39,22 @@ export function OptimizerPanel({ availableETFs, onOptimized }: OptimizerPanelPro
   };
 
   const handleSelectAll = () => {
-    if (selectedETFs.length === availableETFs.length) {
+    if (selectedETFs.length === filteredETFs.length) {
       setSelectedETFs([]);
     } else {
-      setSelectedETFs([...availableETFs]);
+      setSelectedETFs(filteredETFs.map((etf) => etf.code));
+    }
+  };
+
+  const handleSelectByCategory = (cat: string) => {
+    if (cat === '全部') {
+      setSelectedETFs(filteredETFs.map((etf) => etf.code));
+    } else {
+      const codes = filteredETFs.filter((etf) => etf.category === cat).map((etf) => etf.code);
+      setSelectedETFs((prev) => {
+        const newSet = new Set([...prev, ...codes]);
+        return Array.from(newSet);
+      });
     }
   };
 
@@ -101,19 +114,53 @@ export function OptimizerPanel({ availableETFs, onOptimized }: OptimizerPanelPro
           <div className="section-header">
             <h4>选择ETF范围</h4>
             <button className="btn-text" onClick={handleSelectAll}>
-              {selectedETFs.length === availableETFs.length ? '取消全选' : '全选'}
+              {selectedETFs.length === filteredETFs.length ? '取消全选' : '全选'}
             </button>
           </div>
 
+          <div className="optimizer-controls">
+            <input
+              type="text"
+              placeholder="搜索ETF名称或代码..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="optimizer-search-input"
+            />
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="optimizer-category-select"
+            >
+              {CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="category-quick-select">
+            {CATEGORIES.filter((c) => c !== '全部').map((cat) => (
+              <button
+                key={cat}
+                className="btn-category"
+                onClick={() => handleSelectByCategory(cat)}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
           <div className="etf-checklist">
-            {availableETFs.map((code) => (
-              <label key={code} className="etf-checkbox">
+            {filteredETFs.map((etf) => (
+              <label key={etf.code} className="etf-checkbox">
                 <input
                   type="checkbox"
-                  checked={selectedETFs.includes(code)}
-                  onChange={() => handleETFChange(code)}
+                  checked={selectedETFs.includes(etf.code)}
+                  onChange={() => handleETFChange(etf.code)}
                 />
-                <span>{code}</span>
+                <span className="etf-code">{etf.code}</span>
+                <span className="etf-name">{etf.name}</span>
               </label>
             ))}
           </div>

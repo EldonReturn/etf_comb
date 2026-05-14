@@ -23,6 +23,21 @@ function App() {
   const [systemStatus, setSystemStatus] = useState<string>('检查中...');
 
   useEffect(() => {
+    const fetchETFList = async () => {
+      try {
+        const response = await fetch('/api/etfs');
+        if (response.ok) {
+          const data = await response.json();
+          setEtfList(data.etfs || []);
+        }
+      } catch {
+        setEtfList([]);
+      }
+    };
+    fetchETFList();
+  }, []);
+
+  useEffect(() => {
     const checkStatus = async () => {
       try {
         const response = await fetch('/health');
@@ -56,8 +71,6 @@ function App() {
   const handleRemovePortfolio = (index: number) => {
     setSavedPortfolios((prev) => prev.filter((_, i) => i !== index));
   };
-
-  const availableETFCodes = etfList.map((e) => e.code);
 
   return (
     <div className="app">
@@ -120,7 +133,7 @@ function App() {
 
         <aside className="sidebar-right">
           <OptimizerPanel
-            availableETFs={availableETFCodes}
+            availableETFs={etfList}
             onOptimized={handleOptimized}
           />
         </aside>
