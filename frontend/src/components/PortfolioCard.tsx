@@ -95,8 +95,9 @@ export function PortfolioCard({ weights, id, name }: PortfolioCardProps) {
       value: nav,
     }));
 
-    const maxNav = Math.max(...navData.map((d) => d.value));
-    const minNav = Math.min(...navData.map((d) => d.value));
+    const allValues = [...navData.map(d => d.value), ...benchmarkNavData.map(d => d.value)];
+    const maxNav = Math.max(...allValues);
+    const minNav = Math.min(...allValues);
     const valueRange = maxNav - minNav || 1;
 
     const xLabels = [];
@@ -115,15 +116,17 @@ export function PortfolioCard({ weights, id, name }: PortfolioCardProps) {
     }
 
     const rightYLabels = [];
+    const navInitialValue = navData[0]?.value || 1;
+    const benchmarkInitialValue = benchmarkNavData[0]?.value || 1;
     const excessValues = navData.map((d, i) => {
       const benchmarkValue = benchmarkNavData[i]?.value || d.value;
-      return d.value - benchmarkValue;
+      return ((d.value - benchmarkValue - (navInitialValue - benchmarkInitialValue)) / benchmarkInitialValue) * 100;
     });
     const maxExcess = Math.max(...excessValues);
     const minExcess = Math.min(...excessValues);
     const excessRange = Math.max(Math.abs(maxExcess), Math.abs(minExcess), 0.01);
     for (let i = 0; i <= 4; i++) {
-      const pct = (-excessRange + (excessRange * 2 * i) / 4) * 100;
+      const pct = -excessRange + (excessRange * 2 * i) / 4;
       rightYLabels.push({ value: `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`, y: 190 - (i / 4) * 170 });
     }
 
@@ -146,22 +149,29 @@ export function PortfolioCard({ weights, id, name }: PortfolioCardProps) {
         {rightYLabels.map(({ value, y }) => (
           <g key={y}>
             <line x1="490" y1={y} x2="493" y2={y} stroke="var(--border)" strokeWidth="1" />
-            <text x="497" y={y + 4} fontSize="10" fill="var(--text-light)" textAnchor="start">{value}</text>
+            <text x="497" y={y + 4} fontSize="10" fill="#9b59b6" textAnchor="start">{value}</text>
           </g>
         ))}
         {benchmarkNavData.length > 0 && (
           <polyline
             points={benchmarkNavData.map((d) => `${50 + (d.index / (navData.length - 1)) * 440},${190 - ((d.value - minNav) / valueRange) * 170}`).join(' ')}
             fill="none"
-            stroke="#95a5a6"
-            strokeWidth="1"
-            strokeDasharray="4,2"
+            stroke="#555"
+            strokeWidth="2"
+          />
+        )}
+        {excessValues.length > 0 && (
+          <polyline
+            points={excessValues.map((v, i) => `${50 + (i / (navData.length - 1)) * 440},${190 - ((v / excessRange) + 1) * 85}`).join(' ')}
+            fill="none"
+            stroke="#9b59b6"
+            strokeWidth="2"
           />
         )}
         <polyline
           points={navData.map((d) => `${50 + (d.index / (navData.length - 1)) * 440},${190 - ((d.value - minNav) / valueRange) * 170}`).join(' ')}
           fill="none"
-          stroke="#3498db"
+          stroke="#e74c3c"
           strokeWidth="2"
         />
       </svg>
