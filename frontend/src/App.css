@@ -313,6 +313,21 @@ body {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--primary);
+  margin-right: 0.5rem;
+}
+
+.selected-remove {
+  background: none;
+  border: none;
+  color: var(--text-light);
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  line-height: 1;
+}
+
+.selected-remove:hover {
+  color: var(--danger, #dc3545);
 }
 
 /* Portfolio Card */

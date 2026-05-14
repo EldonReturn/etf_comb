@@ -185,6 +185,13 @@ export function ETFSelector({ selectedETFs, onChange }: ETFSelectorProps) {
                   <span className="selected-weight">
                     {(selectedETFs[code] * 100).toFixed(1)}%
                   </span>
+                  <button
+                    className="selected-remove"
+                    onClick={() => handleETFToggle(code)}
+                    title="移除"
+                  >
+                    ×
+                  </button>
                 </div>
               );
             })}

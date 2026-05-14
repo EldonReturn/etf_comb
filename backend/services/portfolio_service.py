@@ -54,6 +54,7 @@ class PortfolioMetrics:
     - max_drawdown_date: 最大回撤发生日期
     - daily_returns: 每日收益率列表
     - nav_series: 净值序列（用于绘图）
+    - nav_dates: 净值日期序列（对应nav_series的每个值）
 
     示例:
         >>> metrics = PortfolioMetrics(
@@ -64,7 +65,8 @@ class PortfolioMetrics:
         >>>     max_drawdown=-8.2,
         >>>     max_drawdown_date="2024-03-15",
         >>>     daily_returns=[0.01, -0.02, 0.015...],
-        >>>     nav_series=[1.0, 1.01, 0.99...]
+        >>>     nav_series=[1.0, 1.01, 0.99...],
+        >>>     nav_dates=["2024-01-02", "2024-01-03", ...]
         >>> )
     """
     total_return: float
@@ -75,6 +77,7 @@ class PortfolioMetrics:
     max_drawdown_date: Optional[str]
     daily_returns: List[float]
     nav_series: List[float]
+    nav_dates: List[str]
     holding_period: int
 
 
@@ -258,7 +261,8 @@ def calculate_max_drawdown(nav_series: List[float]) -> Tuple[float, Optional[str
 
 
 def calculate_portfolio_metrics(daily_returns: List[float],
-                                   nav_series: List[float]) -> PortfolioMetrics:
+                                   nav_series: List[float],
+                                   nav_dates: List[str]) -> PortfolioMetrics:
     """
     计算组合完整业绩指标
 
@@ -267,12 +271,13 @@ def calculate_portfolio_metrics(daily_returns: List[float],
     参数:
         daily_returns: 每日收益率序列
         nav_series: 净值序列
+        nav_dates: 净值日期序列
 
     返回:
         PortfolioMetrics: 组合业绩指标对象
 
     示例:
-        >>> metrics = calculate_portfolio_metrics(returns, navs)
+        >>> metrics = calculate_portfolio_metrics(returns, navs, dates)
         >>> print(f"年化收益: {metrics.annualized_return*100:.2f}%")
     """
     if not daily_returns or not nav_series or len(nav_series) < 2:
@@ -285,6 +290,7 @@ def calculate_portfolio_metrics(daily_returns: List[float],
             max_drawdown_date=None,
             daily_returns=[],
             nav_series=[],
+            nav_dates=[],
             holding_period=0
         )
 
@@ -303,6 +309,7 @@ def calculate_portfolio_metrics(daily_returns: List[float],
         max_drawdown_date=max_dd_date,
         daily_returns=daily_returns,
         nav_series=nav_series,
+        nav_dates=nav_dates,
         holding_period=len(nav_series)
     )
 
@@ -333,6 +340,34 @@ def get_etf_nav_series(session: Session, code: str, days: int = 365) -> List[flo
     ).order_by(ETFNavHistory.nav_date).all()
 
     return [float(r.accum_nav) for r in records]
+
+
+def get_etf_nav_dates(session: Session, code: str, days: int = 365) -> List[str]:
+    """
+    从数据库获取ETF净值日期序列
+
+    参数:
+        session: 数据库会话
+        code: ETF代码
+        days: 获取最近多少天的数据
+
+    返回:
+        List[str]: 日期序列（格式：YYYY-MM-DD）
+
+    示例:
+        >>> with get_session() as session:
+        >>>     dates = get_etf_nav_dates(session, "510300", 365)
+    """
+    end_date = date.today()
+    start_date = end_date - timedelta(days=days)
+
+    records = session.query(ETFNavHistory).filter(
+        ETFNavHistory.etf_code == code,
+        ETFNavHistory.nav_date >= start_date,
+        ETFNavHistory.nav_date <= end_date
+    ).order_by(ETFNavHistory.nav_date).all()
+
+    return [r.nav_date.isoformat() for r in records]
 
 
 def calculate_single_etf_metrics(session: Session, code: str, name: str) -> SingleETFFMetrics:
@@ -434,12 +469,16 @@ def evaluate_portfolio(weights: Dict[str, float],
                 "sharpe_ratio": 0.0,
                 "max_drawdown": 0.0,
                 "holding_period": 0,
+                "nav_series": [],
+                "nav_dates": [],
                 "etf_metrics": {}
             }
 
+        nav_dates = get_etf_nav_dates(session, etf_codes[0])[-len(etf_navs_list[0]):] if etf_navs_list else []
         benchmark_navs = get_etf_nav_series(session, "510350.SH") if len(weights) > 0 else []
         min_len = min(len(navs) for navs in etf_navs_list) if etf_navs_list else 0
         benchmark_navs = benchmark_navs[-min_len:] if len(benchmark_navs) > min_len else benchmark_navs
+        nav_dates = nav_dates[-min_len:] if len(nav_dates) > min_len else nav_dates
 
         normalized_navs_list = [navs[-min_len:] for navs in etf_navs_list]
 
@@ -452,7 +491,7 @@ def evaluate_portfolio(weights: Dict[str, float],
             portfolio_navs.append(portfolio_value)
 
         daily_returns = calculate_returns_from_nav(portfolio_navs)
-        metrics = calculate_portfolio_metrics(daily_returns, portfolio_navs)
+        metrics = calculate_portfolio_metrics(daily_returns, portfolio_navs, nav_dates)
 
         etf_metrics = {}
         for i, code in enumerate(etf_codes):
@@ -491,6 +530,7 @@ def evaluate_portfolio(weights: Dict[str, float],
             "max_drawdown": metrics.max_drawdown,
             "holding_period": metrics.holding_period,
             "nav_series": metrics.nav_series,
+            "nav_dates": metrics.nav_dates,
             "benchmark_nav_series": benchmark_navs,
             "daily_returns": metrics.daily_returns,
             "etf_metrics": etf_metrics
