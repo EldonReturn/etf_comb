@@ -79,8 +79,6 @@ const mockComparisonResult = {
   ],
 };
 
-const mockHealthResponse = { status: 'healthy' };
-
 // ─── Fetch Mock Helpers ──────────────────────────────────────
 
 function mockFetchSuccess(data: unknown, ok = true) {
@@ -126,14 +124,14 @@ afterEach(() => {
 
 describe('App 整体渲染', () => {
   it('应渲染标题"ETF组合推荐系统"', async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(mockFetchSuccess(mockHealthResponse));
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(mockFetchSuccess(mockETFList));
     render(<App />);
 
     expect(screen.getByRole('heading', { name: 'ETF组合推荐系统' })).toBeInTheDocument();
   });
 
   it('应渲染视图切换按钮"单组合"和"对比模式"', async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockFetchSuccess(mockHealthResponse));
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockFetchSuccess(mockETFList));
     render(<App />);
 
     expect(screen.getByRole('button', { name: '单组合' })).toBeInTheDocument();
@@ -141,7 +139,7 @@ describe('App 整体渲染', () => {
   });
 
   it('"单组合"按钮默认处于激活状态', async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockFetchSuccess(mockHealthResponse));
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockFetchSuccess(mockETFList));
     render(<App />);
 
     const singleBtn = screen.getByRole('button', { name: '单组合' });
@@ -149,7 +147,7 @@ describe('App 整体渲染', () => {
   });
 
   it('点击"对比模式"后该按钮应激活', async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockFetchSuccess(mockHealthResponse));
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockFetchSuccess(mockETFList));
     render(<App />);
 
     fireEvent.click(screen.getByRole('button', { name: '对比模式' }));
@@ -158,37 +156,8 @@ describe('App 整体渲染', () => {
     expect(compareBtn.classList.contains('active')).toBe(true);
   });
 
-  it('应显示系统健康状态', async () => {
-    (fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(mockFetchSuccess(mockHealthResponse))
-      .mockResolvedValueOnce(mockFetchSuccess(mockETFList));
-    render(<App />);
-
-    await waitFor(() => {
-      expect(screen.getByText('系统正常')).toBeInTheDocument();
-    });
-  });
-
-  it('系统断开连接时应显示"未连接后端"', async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Network error'));
-    render(<App />);
-
-    await waitFor(() => {
-      expect(screen.getByText('未连接后端')).toBeInTheDocument();
-    });
-  });
-
-  it('系统状态应默认显示"检查中..."', async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockImplementation(
-      () => new Promise(() => {}), // never resolves
-    );
-    render(<App />);
-
-    expect(screen.getByText('检查中...')).toBeInTheDocument();
-  });
-
   it('布局应包含左侧ETF选择器和右侧优化面板', async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockFetchSuccess(mockHealthResponse));
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockFetchSuccess(mockETFList));
     render(<App />);
 
     expect(screen.getByRole('heading', { name: '选择ETF' })).toBeInTheDocument();
@@ -196,7 +165,7 @@ describe('App 整体渲染', () => {
   });
 
   it('无选中ETF时不应显示"保存当前组合"按钮', async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockFetchSuccess(mockHealthResponse));
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockFetchSuccess(mockETFList));
     render(<App />);
 
     await waitFor(() => {
@@ -920,7 +889,6 @@ describe('集成流程', () => {
   it('选择ETF → 评估 → 显示指标（完整流程）', async () => {
     (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: RequestInfo | URL) => {
       const urlStr = url.toString();
-      if (urlStr.includes('/health')) return mockFetchSuccess(mockHealthResponse);
       if (urlStr.includes('/api/etfs')) return mockFetchSuccess(mockETFList);
       if (urlStr.includes('/api/portfolio/evaluate')) return mockFetchSuccess(mockPortfolioMetrics);
       return mockFetchSuccess({});
@@ -944,7 +912,6 @@ describe('集成流程', () => {
   it('保存组合后按钮仍存在', async () => {
     (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: RequestInfo | URL) => {
       const urlStr = url.toString();
-      if (urlStr.includes('/health')) return mockFetchSuccess(mockHealthResponse);
       if (urlStr.includes('/api/etfs')) return mockFetchSuccess(mockETFList);
       if (urlStr.includes('/api/portfolio/evaluate')) return mockFetchSuccess(mockPortfolioMetrics);
       return mockFetchSuccess({});
@@ -966,7 +933,6 @@ describe('集成流程', () => {
   it('切换至对比模式后应展示对比组件', async () => {
     (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: RequestInfo | URL) => {
       const urlStr = url.toString();
-      if (urlStr.includes('/health')) return mockFetchSuccess(mockHealthResponse);
       if (urlStr.includes('/api/etfs')) return mockFetchSuccess(mockETFList);
       return mockFetchSuccess({});
     });
@@ -1072,7 +1038,7 @@ describe('可访问性', () => {
   });
 
   it('视图切换按钮应有明确文本', () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(mockFetchSuccess(mockHealthResponse));
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(mockFetchSuccess(mockETFList));
     render(<App />);
 
     expect(screen.getByRole('button', { name: '单组合' })).toBeInTheDocument();

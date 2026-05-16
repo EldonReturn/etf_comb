@@ -32,7 +32,6 @@ function App() {
   const [currentWeights, setCurrentWeights] = useState<Weights>({});
   const [savedPortfolios, setSavedPortfolios] = useState<Weights[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('single');
-  const [systemStatus, setSystemStatus] = useState<string>('检查中...');
   const [timeRange, setTimeRange] = useState<TimeRange>('1y');
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
@@ -50,23 +49,6 @@ function App() {
       }
     };
     fetchETFList();
-  }, []);
-
-  useEffect(() => {
-    const checkStatus = async () => {
-      try {
-        const response = await fetch('/health');
-        if (response.ok) {
-          const data = await response.json();
-          setSystemStatus(data.status || 'running');
-        }
-      } catch {
-        setSystemStatus('disconnected');
-      }
-    };
-    checkStatus();
-    const interval = setInterval(checkStatus, 30000);
-    return () => clearInterval(interval);
   }, []);
 
   const handleWeightsChange = (weights: Weights) => {
@@ -114,12 +96,6 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1>ETF组合推荐系统</h1>
-        <div className="header-status">
-          <span className={`status-indicator ${systemStatus}`} />
-          <span className="status-text">
-            {systemStatus === 'running' || systemStatus === 'healthy' ? '系统正常' : systemStatus === 'disconnected' ? '未连接后端' : systemStatus}
-          </span>
-        </div>
       </header>
 
       <div className="app-toolbar">

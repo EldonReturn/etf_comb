@@ -439,16 +439,6 @@ async def stop_scheduler_api():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/health", tags=["健康检查"])
-async def health_check():
-    """
-    健康检查
-
-    用于监控应用运行状态。
-    """
-    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
-
-
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
