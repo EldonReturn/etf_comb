@@ -6,9 +6,10 @@ const CATEGORIES = ['全部', '宽基指数', '行业指数', '债券', '商品'
 interface OptimizerPanelProps {
   availableETFs: ETFInfo[];
   onOptimized: (weights: Weights) => void;
+  timeRange?: string;
 }
 
-export function OptimizerPanel({ availableETFs, onOptimized }: OptimizerPanelProps) {
+export function OptimizerPanel({ availableETFs, onOptimized, timeRange = '1y' }: OptimizerPanelProps) {
   const [selectedETFs, setSelectedETFs] = useState<string[]>([]);
   const [maxWeight, setMaxWeight] = useState<number | undefined>(undefined);
   const [targetVolatility, setTargetVolatility] = useState<number | undefined>(undefined);
@@ -76,6 +77,7 @@ export function OptimizerPanel({ availableETFs, onOptimized }: OptimizerPanelPro
           etf_codes: selectedETFs,
           max_weight: maxWeight,
           target_volatility: targetVolatility,
+          period: timeRange,
         }),
       });
 

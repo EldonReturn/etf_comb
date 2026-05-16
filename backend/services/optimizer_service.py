@@ -38,7 +38,8 @@ from backend.services.portfolio_service import (
     calculate_volatility,
     calculate_sharpe_ratio,
     evaluate_portfolio,
-    get_session
+    get_session,
+    period_to_days
 )
 
 logger = logging.getLogger(__name__)
@@ -200,35 +201,26 @@ def maximize_return_objective(weights: np.ndarray, returns: np.ndarray,
 
 def optimize_max_return(etf_codes: List[str],
                           session: Optional[Session] = None,
-                          risk_aversion: float = RISK_AVERSION_DEFAULT) -> OptimizationResult:
+                          risk_aversion: float = RISK_AVERSION_DEFAULT,
+                          period: Optional[str] = None) -> OptimizationResult:
     """
     优化求解最大收益组合
-
-    使用均值-方差优化框架，在给定约束下寻找最大收益组合。
 
     参数:
         etf_codes: 可选ETF代码列表
         session: 数据库会话
         risk_aversion: 风险厌恶系数（0表示纯最大收益）
+        period: 时间区段字符串，如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'（可选）
 
     返回:
         OptimizationResult: 优化结果
-
-    算法流程：
-        1. 获取各ETF历史净值
-        2. 计算各ETF年化收益率
-        3. 计算协方差矩阵
-        4. 使用scipy.optimize.minimize求解
-
-    示例:
-        >>> result = optimize_max_return(["510300", "510500", "159915"])
-        >>> print(result.weights)  # {'510300': 0.5, '510500': 0.3, '159915': 0.2}
-        >>> print(result.expected_return)  # 12.5
     """
     close_session = False
     if session is None:
         session = get_session().__enter__()
         close_session = True
+
+    days = period_to_days(period)
 
     try:
         if len(etf_codes) == 0:
@@ -254,7 +246,7 @@ def optimize_max_return(etf_codes: List[str],
         navs_list = []
         valid_codes = []
         for code in etf_codes:
-            navs = get_etf_nav_series(session, code)
+            navs = get_etf_nav_series(session, code, days)
             if len(navs) >= 30:
                 navs_list.append(navs)
                 valid_codes.append(code)
@@ -366,7 +358,8 @@ def optimize_max_return(etf_codes: List[str],
 def optimize_with_constraints(etf_codes: List[str],
                                 max_weight: Optional[float] = None,
                                 target_volatility: Optional[float] = None,
-                                session: Optional[Session] = None) -> OptimizationResult:
+                                session: Optional[Session] = None,
+                                period: Optional[str] = None) -> OptimizationResult:
     """
     带约束的最大收益优化
 
@@ -375,21 +368,17 @@ def optimize_with_constraints(etf_codes: List[str],
         max_weight: 单个ETF最大权重（可选）
         target_volatility: 目标波动率上限（可选）
         session: 数据库会话
+        period: 时间区段字符串，如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'（可选）
 
     返回:
         OptimizationResult: 优化结果
-
-    示例:
-        >>> result = optimize_with_constraints(
-        >>>     ["510300", "510500", "159915"],
-        >>>     max_weight=0.3,
-        >>>     target_volatility=0.20
-        >>> )
     """
     close_session = False
     if session is None:
         session = get_session().__enter__()
         close_session = True
+
+    days = period_to_days(period)
 
     try:
         if len(etf_codes) == 0:
@@ -415,7 +404,7 @@ def optimize_with_constraints(etf_codes: List[str],
         navs_list = []
         valid_codes = []
         for code in etf_codes:
-            navs = get_etf_nav_series(session, code)
+            navs = get_etf_nav_series(session, code, days)
             if len(navs) >= 30:
                 navs_list.append(navs)
                 valid_codes.append(code)

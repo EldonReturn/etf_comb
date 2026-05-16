@@ -109,6 +109,11 @@ class PortfolioEvaluateRequest(BaseModel):
         description="ETF权重字典，键为ETF代码，值为权重(0-1之间)",
         example={"510300": 0.6, "510500": 0.4}
     )
+    period: Optional[str] = Field(
+        None,
+        description="时间区段，如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'",
+        example="1y"
+    )
 
 
 class PortfolioCompareRequest(BaseModel):
@@ -120,6 +125,11 @@ class PortfolioCompareRequest(BaseModel):
             {"510300": 1.0},
             {"510300": 0.5, "510500": 0.5}
         ]
+    )
+    period: Optional[str] = Field(
+        None,
+        description="时间区段，如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'",
+        example="1y"
     )
 
 
@@ -139,6 +149,20 @@ class OptimizeRequest(BaseModel):
         None,
         description="目标波动率上限（可选，百分比形式）",
         example=20.0
+    )
+    period: Optional[str] = Field(
+        None,
+        description="时间区段，如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'",
+        example="1y"
+    )
+
+
+class SyncRequest(BaseModel):
+    """同步请求模型"""
+    period: Optional[str] = Field(
+        None,
+        description="同步时间区段，如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'",
+        example="1y"
     )
 
 
@@ -247,19 +271,13 @@ async def evaluate_portfolio_api(request: PortfolioEvaluateRequest):
     根据各ETF的权重计算组合的加权业绩指标。
 
     参数:
-        request: PortfolioEvaluateRequest，包含权重字典
+        request: PortfolioEvaluateRequest，包含权重字典和时间区段
 
     返回:
-        组合业绩指标，包括：
-        - total_return: 累计收益率(%)
-        - annualized_return: 年化收益率(%)
-        - volatility: 年化波动率(%)
-        - sharpe_ratio: 夏普比率
-        - max_drawdown: 最大回撤(%)
-        - etf_metrics: 各ETF的详细指标
+        组合业绩指标
     """
     try:
-        result = evaluate_portfolio(request.weights)
+        result = evaluate_portfolio(request.weights, period=request.period)
         return result
     except Exception as e:
         logger.error(f"组合评估失败: {e}")
@@ -274,13 +292,13 @@ async def compare_portfolios_api(request: PortfolioCompareRequest):
     将多个组合并列比较，返回各自的业绩指标。
 
     参数:
-        request: PortfolioCompareRequest，包含多个组合的权重
+        request: PortfolioCompareRequest，包含多个组合的权重和时间区段
 
     返回:
         多个组合的业绩指标列表
     """
     try:
-        results = compare_portfolios(request.portfolios)
+        results = compare_portfolios(request.portfolios, period=request.period)
         return {"portfolios": results}
     except Exception as e:
         logger.error(f"组合对比失败: {e}")
@@ -295,7 +313,7 @@ async def optimize_portfolio_api(request: OptimizeRequest):
     在给定可选ETF范围内，使用均值-方差优化寻找最大收益组合。
 
     参数:
-        request: OptimizeRequest，包含可选ETF列表和约束条件
+        request: OptimizeRequest，包含可选ETF列表、约束条件和时间区段
 
     返回:
         最优组合的权重和预期业绩指标
@@ -306,9 +324,13 @@ async def optimize_portfolio_api(request: OptimizeRequest):
                 etf_codes=request.etf_codes,
                 max_weight=request.max_weight,
                 target_volatility=request.target_volatility / 100 if request.target_volatility else None,
+                period=request.period,
             )
         else:
-            result = optimize_max_return(etf_codes=request.etf_codes)
+            result = optimize_max_return(
+                etf_codes=request.etf_codes,
+                period=request.period,
+            )
 
         if not result.success:
             raise HTTPException(status_code=400, detail=result.message)
@@ -329,20 +351,24 @@ async def optimize_portfolio_api(request: OptimizeRequest):
 
 
 @app.post("/api/admin/sync", response_model=SyncResponse, tags=["数据管理"])
-async def sync_etf_data():
+async def sync_etf_data(request: SyncRequest = None):
     """
     手动触发ETF数据同步
 
     从AkShare获取最新ETF数据并存储到本地数据库。
-    这是一个耗时操作，请耐心等待。
+    支持按时间区段同步（默认同步全部）。
+
+    参数:
+        request: SyncRequest，包含同步时间区段（可选）
 
     返回:
         SyncResponse: 同步统计信息
     """
     try:
-        logger.info("开始手动触发ETF数据全量同步")
-        stats = sync_all_etf_data()
-        logger.info("手动触发ETF数据全量同步完成")
+        logger.info("开始手动触发ETF数据同步")
+        period = request.period if request else None
+        stats = sync_all_etf_data(period=period)
+        logger.info("手动触发ETF数据同步完成")
         return SyncResponse(
             status="completed",
             etf_count=stats["etf_count"],

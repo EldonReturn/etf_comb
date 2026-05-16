@@ -141,14 +141,15 @@ export async function fetchETFHistory(
 /**
  * 评估组合表现
  * @param weights ETF权重字典
+ * @param period 时间区段
  */
-export async function evaluatePortfolio(weights: Weights): Promise<PortfolioMetrics> {
+export async function evaluatePortfolio(weights: Weights, period?: string): Promise<PortfolioMetrics> {
   const response = await fetch(`${API_BASE}/portfolio/evaluate`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ weights }),
+    body: JSON.stringify({ weights, period }),
   });
   if (!response.ok) {
     throw new Error(`评估组合失败: ${response.statusText}`);
@@ -159,16 +160,18 @@ export async function evaluatePortfolio(weights: Weights): Promise<PortfolioMetr
 /**
  * 比较多个组合
  * @param portfolios 多个组合的权重列表
+ * @param period 时间区段
  */
 export async function comparePortfolios(
-  portfolios: Weights[]
+  portfolios: Weights[],
+  period?: string
 ): Promise<{ portfolios: PortfolioMetrics[] }> {
   const response = await fetch(`${API_BASE}/portfolio/compare`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ portfolios }),
+    body: JSON.stringify({ portfolios, period }),
   });
   if (!response.ok) {
     throw new Error(`对比组合失败: ${response.statusText}`);
@@ -181,11 +184,13 @@ export async function comparePortfolios(
  * @param etfCodes 可选ETF代码列表
  * @param maxWeight 单个ETF最大权重
  * @param targetVolatility 目标波动率
+ * @param period 时间区段
  */
 export async function optimizePortfolio(
   etfCodes: string[],
   maxWeight?: number,
-  targetVolatility?: number
+  targetVolatility?: number,
+  period?: string
 ): Promise<OptimizationResult> {
   const response = await fetch(`${API_BASE}/portfolio/optimize`, {
     method: 'POST',
@@ -196,6 +201,7 @@ export async function optimizePortfolio(
       etf_codes: etfCodes,
       max_weight: maxWeight,
       target_volatility: targetVolatility,
+      period,
     }),
   });
   if (!response.ok) {
@@ -206,10 +212,15 @@ export async function optimizePortfolio(
 
 /**
  * 手动同步ETF数据
+ * @param period 时间区段
  */
-export async function syncETFData(): Promise<SyncResponse> {
+export async function syncETFData(period?: string): Promise<SyncResponse> {
   const response = await fetch(`${API_BASE}/admin/sync`, {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ period }),
   });
   if (!response.ok) {
     throw new Error(`同步数据失败: ${response.statusText}`);

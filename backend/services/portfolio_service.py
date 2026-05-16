@@ -38,6 +38,32 @@ RISK_FREE_RATE = 0.03
 TRADING_DAYS_PER_YEAR = 252
 
 
+def period_to_days(period: Optional[str]) -> int:
+    """
+    将时间区段字符串转换为天数
+
+    参数:
+        period: 时间区段字符串，如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'
+
+    返回:
+        int: 对应的天数，默认365天
+    """
+    if not period:
+        return 365
+
+    period_map = {
+        '1m': 30,
+        '3m': 90,
+        '6m': 180,
+        '1y': 365,
+        '2y': 730,
+        '3y': 1095,
+        '5y': 1825,
+    }
+
+    return period_map.get(period, 365)
+
+
 @dataclass
 class PortfolioMetrics:
     """
@@ -370,7 +396,8 @@ def get_etf_nav_dates(session: Session, code: str, days: int = 365) -> List[str]
     return [r.nav_date.isoformat() for r in records]
 
 
-def calculate_single_etf_metrics(session: Session, code: str, name: str) -> SingleETFFMetrics:
+def calculate_single_etf_metrics(session: Session, code: str, name: str,
+                                  period: Optional[str] = None) -> SingleETFFMetrics:
     """
     计算单只ETF的业绩指标
 
@@ -378,15 +405,13 @@ def calculate_single_etf_metrics(session: Session, code: str, name: str) -> Sing
         session: 数据库会话
         code: ETF代码
         name: ETF名称
+        period: 时间区段字符串，如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'（可选）
 
     返回:
         SingleETFFMetrics: ETF业绩指标对象
-
-    示例:
-        >>> with get_session() as session:
-        >>>     metrics = calculate_single_etf_metrics(session, "510300", "沪深300ETF")
     """
-    nav_series = get_etf_nav_series(session, code)
+    days = period_to_days(period)
+    nav_series = get_etf_nav_series(session, code, days)
 
     if len(nav_series) < 2:
         return SingleETFFMetrics(
@@ -420,36 +445,26 @@ def calculate_single_etf_metrics(session: Session, code: str, name: str) -> Sing
 
 
 def evaluate_portfolio(weights: Dict[str, float],
-                        session: Optional[Session] = None) -> Dict:
+                        session: Optional[Session] = None,
+                        period: Optional[str] = None) -> Dict:
     """
     评估组合业绩
-
-    根据各ETF的权重计算组合的加权业绩指标。
 
     参数:
         weights: ETF权重字典，键为代码，值为权重（0-1之间）
             示例: {"510300": 0.5, "510500": 0.5}
         session: 数据库会话（可选）
+        period: 时间区段字符串，如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'（可选）
 
     返回:
-        Dict: 组合业绩指标字典，包含：
-            - total_return: 累计收益率(%)
-            - annualized_return: 年化收益率(%)
-            - volatility: 年化波动率(%)
-            - sharpe_ratio: 夏普比率
-            - max_drawdown: 最大回撤(%)
-            - holding_period: 持有天数
-            - etf_metrics: 各ETF的业绩指标
-
-    示例:
-        >>> weights = {"510300": 0.6, "510500": 0.4}
-        >>> result = evaluate_portfolio(weights)
-        >>> print(f"组合年化收益: {result['annualized_return']:.2f}%")
+        Dict: 组合业绩指标字典
     """
     close_session = False
     if session is None:
         session = get_session().__enter__()
         close_session = True
+
+    days = period_to_days(period)
 
     try:
         etf_codes = list(weights.keys())
@@ -457,7 +472,7 @@ def evaluate_portfolio(weights: Dict[str, float],
 
         etf_navs_list = []
         for code in etf_codes:
-            navs = get_etf_nav_series(session, code)
+            navs = get_etf_nav_series(session, code, days)
             if navs:
                 etf_navs_list.append(navs)
 
@@ -474,8 +489,8 @@ def evaluate_portfolio(weights: Dict[str, float],
                 "etf_metrics": {}
             }
 
-        nav_dates = get_etf_nav_dates(session, etf_codes[0])[-len(etf_navs_list[0]):] if etf_navs_list else []
-        benchmark_navs = get_etf_nav_series(session, "510350.SH") if len(weights) > 0 else []
+        nav_dates = get_etf_nav_dates(session, etf_codes[0], days)[-len(etf_navs_list[0]):] if etf_navs_list else []
+        benchmark_navs = get_etf_nav_series(session, "510350.SH", days) if len(weights) > 0 else []
         min_len = min(len(navs) for navs in etf_navs_list) if etf_navs_list else 0
         benchmark_navs = benchmark_navs[-min_len:] if len(benchmark_navs) > min_len else benchmark_navs
         nav_dates = nav_dates[-min_len:] if len(nav_dates) > min_len else nav_dates
@@ -540,7 +555,8 @@ def evaluate_portfolio(weights: Dict[str, float],
             session.close()
 
 
-def compare_portfolios(portfolios: List[Dict[str, float]]) -> List[Dict]:
+def compare_portfolios(portfolios: List[Dict[str, float]],
+                       period: Optional[str] = None) -> List[Dict]:
     """
     比较多个组合的业绩
 
@@ -550,17 +566,14 @@ def compare_portfolios(portfolios: List[Dict[str, float]]) -> List[Dict]:
                 {"510300": 0.5, "510500": 0.5},
                 {"510300": 1.0}
             ]
+        period: 时间区段字符串，如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'（可选）
 
     返回:
         List[Dict]: 每个组合的业绩指标列表
-
-    示例:
-        >>> portfolios = [{"510300": 1.0}, {"510300": 0.5, "510500": 0.5}]
-        >>> results = compare_portfolios(portfolios)
     """
     results = []
     for i, weights in enumerate(portfolios):
-        metrics = evaluate_portfolio(weights)
+        metrics = evaluate_portfolio(weights, period=period)
         metrics["portfolio_id"] = i + 1
         metrics["portfolio_name"] = f"组合{i + 1}"
         results.append(metrics)

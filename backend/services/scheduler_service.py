@@ -47,7 +47,7 @@ def sync_etf_data_job():
             if current % 50 == 0 or current == total:
                 logger.info(f"进度: [{current}/{total}] {message}")
 
-        stats = sync_all_etf_data(progress_callback=progress_callback)
+        stats = sync_all_etf_data(progress_callback=progress_callback, period="1y")
 
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()

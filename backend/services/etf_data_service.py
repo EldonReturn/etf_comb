@@ -36,6 +36,7 @@ from sqlalchemy.orm import Session
 
 from backend.db.models import ETFInfo, ETFNavHistory
 from backend.db.database import get_session
+from backend.services.portfolio_service import period_to_days
 
 try:
     from tickflow import TickFlow
@@ -498,7 +499,7 @@ def get_etf_history_from_db(session: Session, code: str,
     ]
 
 
-def sync_all_etf_data(progress_callback=None) -> Dict[str, int]:
+def sync_all_etf_data(progress_callback=None, period: Optional[str] = None) -> Dict[str, int]:
     """
     同步所有ETF数据（完整流程）
 
@@ -509,24 +510,20 @@ def sync_all_etf_data(progress_callback=None) -> Dict[str, int]:
 
     参数:
         progress_callback: 进度回调函数，签名为 callback(current, total, message)
-            - current: 当前处理的ETF索引
-            - total: ETF总数
-            - message: 当前状态描述
+        period: 时间区段字符串（如 '1y'），按此区段过滤保存的数据
 
     返回:
         Dict[str, int]: 同步统计，包含：
             - etf_count: ETF总数
             - nav_count: 更新的净值记录总数
             - errors: 失败的ETF数量
-
-    示例:
-        >>> def my_progress(current, total, msg):
-        >>>     print(f"[{current}/{total}] {msg}")
-        >>>
-        >>> stats = sync_all_etf_data(progress_callback=my_progress)
-        >>> print(f"同步完成: {stats}")
     """
     stats = {"etf_count": 0, "nav_count": 0, "errors": 0}
+
+    start_date = None
+    if period:
+        days = period_to_days(period)
+        start_date = date.today() - timedelta(days=days)
 
     with get_session() as session:
         clear_etf_data(session)
@@ -553,6 +550,11 @@ def sync_all_etf_data(progress_callback=None) -> Dict[str, int]:
             if code in batch_results:
                 df = batch_results[code]
                 if df is not None and not df.empty:
+                    if start_date:
+                        df = df[pd.to_datetime(df['日期']) >= pd.Timestamp(start_date)]
+                        if df.empty:
+                            stats["errors"] += 1
+                            continue
                     try:
                         nav_count = save_etf_nav_to_db(session, code, df)
                         stats["nav_count"] += nav_count

@@ -18,6 +18,7 @@ interface PortfolioCardProps {
   weights: Weights;
   id?: number;
   name?: string;
+  timeRange?: string;
 }
 
 type MetricCardProps = {
@@ -46,7 +47,7 @@ function MetricCard({ label, value, suffix = '', color }: MetricCardProps) {
   );
 }
 
-export function PortfolioCard({ weights, id, name }: PortfolioCardProps) {
+export function PortfolioCard({ weights, id, name, timeRange = '1y' }: PortfolioCardProps) {
   const [metrics, setMetrics] = useState<PortfolioMetrics | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +66,7 @@ export function PortfolioCard({ weights, id, name }: PortfolioCardProps) {
         const response = await fetch('/api/portfolio/evaluate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ weights }),
+          body: JSON.stringify({ weights, period: timeRange }),
         });
         if (!response.ok) throw new Error('评估失败');
         const data = await response.json();
@@ -78,7 +79,7 @@ export function PortfolioCard({ weights, id, name }: PortfolioCardProps) {
     };
 
     loadMetrics();
-  }, [weights]);
+  }, [weights, timeRange]);
 
   const renderNavChart = () => {
     if (!metrics?.nav_series || metrics.nav_series.length === 0) {
