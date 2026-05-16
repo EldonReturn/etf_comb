@@ -219,10 +219,32 @@ body {
   padding: 1rem;
 }
 
+.search-hint {
+  background: var(--highlight-bg, #fef3cd);
+  color: var(--text-dark);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--warning, #ffc107);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.search-hint strong {
+  color: var(--primary);
+}
+
 .etf-list {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.etf-list[data-loading] {
+  pointer-events: none;
+  opacity: 0.5;
 }
 
 .etf-item {
@@ -1020,6 +1042,10 @@ body {
   background: rgba(52, 152, 219, 0.1);
   color: var(--primary);
   text-align: center;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin-bottom: 0;
 }
 
 .error,

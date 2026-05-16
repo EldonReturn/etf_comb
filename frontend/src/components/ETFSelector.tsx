@@ -29,6 +29,7 @@ export function ETFSelector({ selectedETFs, onChange, period }: ETFSelectorProps
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [category, setCategory] = useState('全部');
+  const [pendingSearch, setPendingSearch] = useState('');
 
   const loadETFList = useCallback(async () => {
     setLoading(true);
@@ -128,8 +129,13 @@ export function ETFSelector({ selectedETFs, onChange, period }: ETFSelectorProps
           <input
             type="text"
             placeholder="搜索ETF名称或代码..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            value={pendingSearch}
+            onChange={(e) => setPendingSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                setSearchTerm(pendingSearch);
+              }
+            }}
             className="search-input"
           />
           <select
@@ -150,7 +156,13 @@ export function ETFSelector({ selectedETFs, onChange, period }: ETFSelectorProps
         {loading && <div className="loading">加载中...</div>}
         {error && <div className="error">{error}</div>}
 
-        <div className="etf-list">
+        {pendingSearch && pendingSearch !== searchTerm && (
+          <div className="search-hint">
+            按回车搜索: <strong>{pendingSearch}</strong>
+          </div>
+        )}
+
+        <div className="etf-list" data-loading={loading || undefined}>
           {(() => {
             const sufficientEtfs = etfList.filter(e => e.has_enough_data !== false);
             const insufficientEtfs = etfList.filter(e => e.has_enough_data === false);
