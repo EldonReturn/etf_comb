@@ -427,6 +427,12 @@ body {
   margin-bottom: 1.5rem;
 }
 
+.benchmark-label {
+  font-size: 0.75rem;
+  color: var(--text-light);
+  margin-bottom: 0.5rem;
+}
+
 .chart-tabs {
   display: flex;
   gap: 0.5rem;
@@ -1069,6 +1075,12 @@ body {
 
 .etf-item.data-insufficient {
   opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.etf-item.data-insufficient:hover {
+  border-color: var(--border);
+  background: transparent;
 }
 
 .etf-item.data-insufficient .etf-info {

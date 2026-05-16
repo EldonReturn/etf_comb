@@ -335,6 +335,11 @@ export function PortfolioCard({ weights, id, name, timeRange = '1y' }: Portfolio
             </div>
 
             <div className="chart-section">
+              {metrics?.benchmark_code && metrics?.benchmark_name && (
+                <div className="benchmark-label">
+                  超额收益参考: {metrics.benchmark_code} {metrics.benchmark_name}
+                </div>
+              )}
               <div className="chart-tabs">
                 <button
                   className={`chart-tab ${activeChart === 'nav' ? 'active' : ''}`}

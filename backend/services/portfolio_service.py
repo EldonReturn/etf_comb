@@ -563,6 +563,11 @@ def evaluate_portfolio(weights: Dict[str, float],
                 "max_drawdown": etf_mdd * 100
             }
 
+        benchmark_info = session.query(ETFNavHistory).filter(
+            ETFNavHistory.etf_code == "510350.SH"
+        ).first()
+        benchmark_name = benchmark_info.etf_info.name if benchmark_info else "510350.SH"
+
         return {
             "total_return": metrics.total_return,
             "annualized_return": metrics.annualized_return,
@@ -573,6 +578,8 @@ def evaluate_portfolio(weights: Dict[str, float],
             "nav_series": metrics.nav_series,
             "nav_dates": metrics.nav_dates,
             "benchmark_nav_series": benchmark_navs,
+            "benchmark_code": "510350.SH",
+            "benchmark_name": benchmark_name,
             "daily_returns": metrics.daily_returns,
             "etf_metrics": etf_metrics
         }

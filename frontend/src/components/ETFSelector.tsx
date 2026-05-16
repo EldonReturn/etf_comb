@@ -57,8 +57,8 @@ export function ETFSelector({ selectedETFs, onChange, period }: ETFSelectorProps
   }, [loadETFList]);
 
   const handleETFToggle = (code: string) => {
-    const newWeights = { ...selectedETFs };
-    if (newWeights[code]) {
+    if (selectedETFs[code]) {
+      const newWeights = { ...selectedETFs };
       delete newWeights[code];
       const remainingKeys = Object.keys(newWeights);
       if (remainingKeys.length > 0) {
@@ -67,7 +67,11 @@ export function ETFSelector({ selectedETFs, onChange, period }: ETFSelectorProps
           newWeights[k] = newWeights[k] / total;
         });
       }
+      onChange(newWeights);
     } else {
+      const etf = etfList.find((e) => e.code === code);
+      if (!etf || etf.has_enough_data === false) return;
+      const newWeights = { ...selectedETFs };
       newWeights[code] = 1 / (Object.keys(selectedETFs).length + 1);
       const otherCount = Object.keys(newWeights).length - 1;
       if (otherCount > 0) {
@@ -76,8 +80,8 @@ export function ETFSelector({ selectedETFs, onChange, period }: ETFSelectorProps
           newWeights[k] = equalWeight;
         });
       }
+      onChange(newWeights);
     }
-    onChange(newWeights);
   };
 
   const handleWeightChange = (code: string, newWeight: number) => {

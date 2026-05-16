@@ -57,6 +57,8 @@ export interface PortfolioMetrics {
   nav_series: number[];
   nav_dates: string[];
   benchmark_nav_series: number[];
+  benchmark_code: string;
+  benchmark_name: string;
   daily_returns: number[];
   etf_metrics: Record<string, ETFFMetrics>;
 }
