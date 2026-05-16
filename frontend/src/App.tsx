@@ -169,7 +169,7 @@ function App() {
 
       <main className="app-main">
         <aside className="sidebar-left">
-          <ETFSelector selectedETFs={currentWeights} onChange={handleWeightsChange} />
+          <ETFSelector selectedETFs={currentWeights} onChange={handleWeightsChange} period={timeRange} />
         </aside>
 
         <section className="main-content">

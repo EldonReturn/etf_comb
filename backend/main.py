@@ -48,6 +48,7 @@ from backend.services import (
     stop_scheduler,
     run_sync_now,
     get_scheduler_status,
+    fetch_trade_dates,
 )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -199,22 +200,25 @@ async def root():
 async def get_etfs(
     category: Optional[str] = Query(None, description="按分类筛选ETF"),
     search: Optional[str] = Query(None, description="搜索ETF名称或代码"),
+    period: Optional[str] = Query(None, description="时间区段，用于检查数据是否充足"),
 ):
     """
     获取ETF列表
 
     返回数据库中所有已同步的ETF信息。
     支持按分类和关键词筛选。
+    支持按时间区段检查数据是否充足。
 
     参数:
         category: ETF分类（宽基指数/行业指数/债券/商品/境外）
         search: 搜索关键词（匹配代码或名称）
+        period: 时间区段（如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'）
 
     返回:
         ETFListResponse: 包含总数和ETF列表
     """
     with get_session() as session:
-        etfs = get_etf_info_from_db(session)
+        etfs = get_etf_info_from_db(session, period)
 
         if category:
             etfs = [e for e in etfs if e["category"] == category]
@@ -347,6 +351,25 @@ async def optimize_portfolio_api(request: OptimizeRequest):
         raise
     except Exception as e:
         logger.error(f"组合优化失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/trade_dates/sync", tags=["数据管理"])
+async def sync_trade_dates_api():
+    """
+    手工同步交易日历
+
+    从AkShare获取沪深交易所历史交易日历并写入本地数据库。
+    仅新增不存在的日期，不覆盖已有数据。
+
+    返回:
+        新增的交易日数量
+    """
+    try:
+        count = fetch_trade_dates()
+        return {"status": "completed", "new_trade_dates": count}
+    except Exception as e:
+        logger.error(f"交易日历同步失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

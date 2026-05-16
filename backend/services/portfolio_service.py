@@ -64,6 +64,32 @@ def period_to_days(period: Optional[str]) -> int:
     return period_map.get(period, 365)
 
 
+def period_to_trading_days(period: Optional[str]) -> int:
+    """
+    将时间区段字符串转换为交易日天数
+
+    参数:
+        period: 时间区段字符串，如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'
+
+    返回:
+        int: 对应的交易日天数，默认252天（约1年）
+    """
+    if not period:
+        return 252
+
+    trading_day_map = {
+        '1m': 21,
+        '3m': 63,
+        '6m': 126,
+        '1y': 252,
+        '2y': 504,
+        '3y': 756,
+        '5y': 1260,
+    }
+
+    return trading_day_map.get(period, 252)
+
+
 @dataclass
 class PortfolioMetrics:
     """

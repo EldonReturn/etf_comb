@@ -18,11 +18,12 @@ import type { ETFInfo, Weights } from '../api';
 interface ETFSelectorProps {
   selectedETFs: Weights;
   onChange: (weights: Weights) => void;
+  period?: string;
 }
 
 const CATEGORIES = ['全部', '宽基指数', '行业指数', '债券', '商品', '境外'];
 
-export function ETFSelector({ selectedETFs, onChange }: ETFSelectorProps) {
+export function ETFSelector({ selectedETFs, onChange, period }: ETFSelectorProps) {
   const [etfList, setEtfList] = useState<ETFInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +37,7 @@ export function ETFSelector({ selectedETFs, onChange }: ETFSelectorProps) {
       const params = new URLSearchParams();
       if (category !== '全部') params.append('category', category);
       if (searchTerm) params.append('search', searchTerm);
+      if (period) params.append('period', period);
 
       const url = `/api/etfs${params.toString() ? '?' + params.toString() : ''}`;
       const response = await fetch(url);
@@ -48,7 +50,7 @@ export function ETFSelector({ selectedETFs, onChange }: ETFSelectorProps) {
     } finally {
       setLoading(false);
     }
-  }, [category, searchTerm]);
+  }, [category, searchTerm, period]);
 
   useEffect(() => {
     loadETFList();
@@ -145,37 +147,46 @@ export function ETFSelector({ selectedETFs, onChange }: ETFSelectorProps) {
         {error && <div className="error">{error}</div>}
 
         <div className="etf-list">
-          {etfList.map((etf) => {
-            const isSelected = !!selectedETFs[etf.code];
-            return (
-              <div
-                key={etf.code}
-                className={`etf-item ${isSelected ? 'selected' : ''}`}
-                onClick={() => handleETFToggle(etf.code)}
-              >
-                <div className="etf-info">
-                  <span className="etf-code">{etf.code}</span>
-                  <span className="etf-name">{etf.name}</span>
-                  <span className="etf-category">{etf.category}</span>
-                </div>
-                {isSelected && (
-                  <div className="etf-weight" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={(selectedETFs[etf.code] * 100).toFixed(1)}
-                      onChange={(e) =>
-                        handleWeightChange(etf.code, parseFloat(e.target.value) / 100)
-                      }
-                      className="weight-input"
-                    />
-                    <span className="weight-unit">%</span>
+          {(() => {
+            const sufficientEtfs = etfList.filter(e => e.has_enough_data !== false);
+            const insufficientEtfs = etfList.filter(e => e.has_enough_data === false);
+            const sortedList = [...sufficientEtfs, ...insufficientEtfs];
+
+            return sortedList.map((etf) => {
+              const isSelected = !!selectedETFs[etf.code];
+              return (
+                <div
+                  key={etf.code}
+                  className={`etf-item ${isSelected ? 'selected' : ''} ${etf.has_enough_data === false ? 'data-insufficient' : ''}`}
+                  onClick={() => handleETFToggle(etf.code)}
+                >
+                  <div className="etf-info">
+                    <span className="etf-code">{etf.code}</span>
+                    <span className="etf-name">{etf.name}</span>
+                    <span className="etf-category">{etf.category}</span>
+                    {etf.has_enough_data === false && (
+                      <span className="etf-warning" title="数据不足当前周期">!</span>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                  {isSelected && (
+                    <div className="etf-weight" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={(selectedETFs[etf.code] * 100).toFixed(1)}
+                        onChange={(e) =>
+                          handleWeightChange(etf.code, parseFloat(e.target.value) / 100)
+                        }
+                        className="weight-input"
+                      />
+                      <span className="weight-unit">%</span>
+                    </div>
+                  )}
+                </div>
+              );
+            });
+          })()}
         </div>
       </div>
 

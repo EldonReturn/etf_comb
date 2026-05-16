@@ -6,6 +6,7 @@ ETF数据库模型模块
 数据库表结构：
 1. ETFInfo: ETF基本信息表（代码、名称、分类）
 2. ETFNavHistory: ETF历史净值表（日期、单位净值、累计净值）
+3. TradeDate: 沪深交易所交易日历表（交易日期）
 
 作者: ETF组合系统
 版本: 1.1.0
@@ -92,6 +93,27 @@ class ETFInfo(Base):
         return f"<ETFInfo(code='{self.code}', name='{self.name}', category='{self.category}')>"
 
 
+class TradeDate(Base):
+    """
+    沪深交易所交易日历表
+
+    存储沪深交易所的历日历史数据，用于判断ETF数据是否完整。
+
+    属性说明：
+    - trade_date: 交易日期，主键
+    """
+    __tablename__ = "trade_dates"
+
+    trade_date: Mapped[date] = mapped_column(
+        Date,
+        primary_key=True,
+        comment="交易日期"
+    )
+
+    def __repr__(self) -> str:
+        return f"<TradeDate(trade_date='{self.trade_date}')>"
+
+
 class ETFNavHistory(Base):
     """
     ETF历史净值表
@@ -155,6 +177,10 @@ class ETFNavHistory(Base):
         Index(
             'ix_etf_code_nav_date',
             'etf_code', 'nav_date'
+        ),
+        Index(
+            'ix_nav_date',
+            'nav_date'
         ),
     )
 

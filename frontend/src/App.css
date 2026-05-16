@@ -1066,3 +1066,25 @@ body {
     padding: 1rem;
   }
 }
+
+.etf-item.data-insufficient {
+  opacity: 0.5;
+}
+
+.etf-item.data-insufficient .etf-info {
+  position: relative;
+}
+
+.etf-warning {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  background: #e74c3c;
+  color: white;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: bold;
+  margin-left: 4px;
+}

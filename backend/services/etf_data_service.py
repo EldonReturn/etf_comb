@@ -34,7 +34,7 @@ import akshare as ak
 from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
 
-from backend.db.models import ETFInfo, ETFNavHistory
+from backend.db.models import ETFInfo, ETFNavHistory, TradeDate
 from backend.db.database import get_session
 from backend.services.portfolio_service import period_to_days
 
@@ -434,15 +434,86 @@ def save_etf_nav_to_db(session: Session, code: str, nav_df: pd.DataFrame) -> int
     return len(mappings)
 
 
-def get_etf_info_from_db(session: Session) -> List[Dict]:
+def get_etf_data_days(session: Session, code: str, days: int) -> int:
+    """获取ETF在指定周期内的实际交易日数据天数"""
+    end_date = date.today()
+    start_date = end_date - timedelta(days=days)
+
+    trade_dates = get_trade_dates(session, start_date, end_date)
+    if not trade_dates:
+        return 0
+
+    count = session.query(ETFNavHistory).filter(
+        ETFNavHistory.etf_code == code,
+        ETFNavHistory.nav_date >= start_date,
+        ETFNavHistory.nav_date <= end_date,
+        ETFNavHistory.nav_date.in_(trade_dates)
+    ).count()
+
+    return count
+
+
+def fetch_trade_dates() -> int:
+    """
+    从AkShare获取沪深交易所历史交易日历并写入数据库
+
+    仅插入数据库中不存在的日期，不更新已有数据。
+
+    返回:
+        int: 新增的交易日数量
+    """
+    logger.info("开始从AkShare获取交易日历...")
+    df = ak.tool_trade_date_hist_sina()
+    trade_dates = pd.to_datetime(df['trade_date']).dt.date.tolist()
+    logger.info(f"从AkShare获取到 {len(trade_dates)} 个交易日")
+
+    with get_session() as session:
+        existing = set(
+            row[0] for row in session.query(TradeDate.trade_date).all()
+        )
+        new_dates = [d for d in trade_dates if d not in existing]
+        logger.info(f"数据库中已有 {len(existing)} 个交易日，新增 {len(new_dates)} 个")
+
+        if new_dates:
+            mappings = [{"trade_date": d} for d in new_dates]
+            session.bulk_insert_mappings(TradeDate, mappings)
+            session.commit()
+            logger.info(f"成功写入 {len(new_dates)} 个交易日")
+
+    return len(new_dates)
+
+
+def get_trade_dates(session: Session, start_date: date, end_date: date) -> List[date]:
+    """
+    从数据库获取指定日期范围内的所有交易日
+
+    参数:
+        session: 数据库会话
+        start_date: 起始日期
+        end_date: 结束日期
+
+    返回:
+        List[date]: 该范围内的所有交易日，按日期升序排列
+    """
+    results = session.query(TradeDate.trade_date).filter(
+        TradeDate.trade_date >= start_date,
+        TradeDate.trade_date <= end_date
+    ).order_by(TradeDate.trade_date).all()
+
+    return [r[0] for r in results]
+
+
+def get_etf_info_from_db(session: Session, period: Optional[str] = None) -> List[Dict]:
     """
     从数据库获取所有ETF基本信息
 
     参数:
         session: 数据库会话
+        period: 时间区段字符串（如 '1m', '3m', '6m', '1y' 等），用于计算数据是否充足
 
     返回:
-        List[Dict]: ETF信息列表，每项包含code, name, category, updated_at
+        List[Dict]: ETF信息列表，每项包含code, name, category, updated_at,
+                   以及可选的data_days和has_enough_data（当指定period时）
 
     示例:
         >>> with get_session() as session:
@@ -450,15 +521,31 @@ def get_etf_info_from_db(session: Session) -> List[Dict]:
         >>>     print(f"数据库中有{len(etfs)}只ETF")
     """
     results = session.query(ETFInfo).all()
-    return [
-        {
+    etfs = []
+
+    if period:
+        lookback_days = period_to_days(period)
+        end_date = date.today()
+        start_date = end_date - timedelta(days=lookback_days)
+        trade_dates_in_period = get_trade_dates(session, start_date, end_date)
+        required_trading_days = len(trade_dates_in_period)
+
+    for etf in results:
+        item = {
             "code": etf.code,
             "name": etf.name,
             "category": etf.category,
             "updated_at": etf.updated_at.isoformat() if etf.updated_at else None
         }
-        for etf in results
-    ]
+
+        if period:
+            actual_days = get_etf_data_days(session, etf.code, lookback_days)
+            item["data_days"] = actual_days
+            item["has_enough_data"] = actual_days >= required_trading_days
+
+        etfs.append(item)
+
+    return etfs
 
 
 def get_etf_history_from_db(session: Session, code: str,

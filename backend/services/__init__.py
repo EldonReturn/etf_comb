@@ -13,6 +13,8 @@ from backend.services.etf_data_service import (
     save_etf_info_to_db,
     save_etf_nav_to_db,
     clear_etf_data,
+    fetch_trade_dates,
+    get_trade_dates,
 )
 
 from backend.services.portfolio_service import (
@@ -58,6 +60,8 @@ __all__ = [
     "save_etf_info_to_db",
     "save_etf_nav_to_db",
     "clear_etf_data",
+    "fetch_trade_dates",
+    "get_trade_dates",
     # 组合服务
     "calculate_returns_from_nav",
     "calculate_annualized_return",

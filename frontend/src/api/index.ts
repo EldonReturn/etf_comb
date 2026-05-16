@@ -12,6 +12,8 @@ export interface ETFInfo {
   name: string;
   category: string;
   updated_at: string | null;
+  data_days?: number;
+  has_enough_data?: boolean;
 }
 
 /**
