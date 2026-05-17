@@ -314,7 +314,8 @@ def calculate_max_drawdown(nav_series: List[float]) -> Tuple[float, Optional[str
 
 def calculate_portfolio_metrics(daily_returns: List[float],
                                    nav_series: List[float],
-                                   nav_dates: List[str]) -> PortfolioMetrics:
+                                   nav_dates: List[str],
+                                   benchmark_navs: Optional[List[float]] = None) -> PortfolioMetrics:
     """
     计算组合完整业绩指标
 
@@ -349,7 +350,14 @@ def calculate_portfolio_metrics(daily_returns: List[float],
     total_return = (nav_series[-1] - nav_series[0]) / nav_series[0]
     annualized_return = calculate_annualized_return(total_return, len(nav_series))
     volatility = calculate_volatility(daily_returns)
-    sharpe_ratio = calculate_sharpe_ratio(annualized_return, volatility)
+
+    risk_free_rate = RISK_FREE_RATE
+    if benchmark_navs and len(benchmark_navs) >= 2:
+        benchmark_total_return = (benchmark_navs[-1] - benchmark_navs[0]) / benchmark_navs[0]
+        benchmark_ann_return = calculate_annualized_return(benchmark_total_return, len(benchmark_navs))
+        risk_free_rate = max(0, benchmark_ann_return)
+
+    sharpe_ratio = calculate_sharpe_ratio(annualized_return, volatility, risk_free_rate)
     max_drawdown, max_dd_date = calculate_max_drawdown(nav_series)
 
     return PortfolioMetrics(
@@ -532,7 +540,7 @@ def evaluate_portfolio(weights: Dict[str, float],
             portfolio_navs.append(portfolio_value)
 
         daily_returns = calculate_returns_from_nav(portfolio_navs)
-        metrics = calculate_portfolio_metrics(daily_returns, portfolio_navs, nav_dates)
+        metrics = calculate_portfolio_metrics(daily_returns, portfolio_navs, nav_dates, benchmark_navs)
 
         etf_metrics = {}
         for i, code in enumerate(etf_codes):
