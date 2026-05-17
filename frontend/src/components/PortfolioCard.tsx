@@ -141,7 +141,7 @@ export function PortfolioCard({ weights, id, name, timeRange = '1y' }: Portfolio
     const benchmarkInitialValue = benchmarkNavData[0]?.value || 1;
     const excessValues = navData.map((d, i) => {
       const benchmarkValue = benchmarkNavData[i]?.value || d.value;
-      return ((d.value - benchmarkValue - (navInitialValue - benchmarkInitialValue)) / benchmarkInitialValue) * 100;
+      return ((d.value / navInitialValue) - (benchmarkValue / benchmarkInitialValue)) * 100;
     });
     const maxExcess = Math.max(...excessValues);
     const minExcess = Math.min(...excessValues);
