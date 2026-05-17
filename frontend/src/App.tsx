@@ -131,52 +131,56 @@ function App() {
         </div>
 
         <div className="time-range-selector">
-          <select
-            value={timeRange}
-            onChange={(e) => setTimeRange(e.target.value as TimeRange)}
-            className="optimizer-category-select"
-          >
-            {TIME_RANGES.map((tr) => (
-              <option key={tr.value} value={tr.value}>
-                {tr.label}
-              </option>
-            ))}
-          </select>
-          <input
-            type="text"
-            placeholder="搜索基准ETF..."
-            value={benchmarkSearch}
-            onChange={(e) => setBenchmarkSearch(e.target.value)}
-            className="optimizer-search-input"
-            style={{ width: '120px', height: '30px', fontSize: '12px' }}
-          />
-          <select
-            value={benchmarkCode}
-            onChange={(e) => setBenchmarkCode(e.target.value)}
-            className="optimizer-category-select"
-            title="基准ETF"
-          >
-            {etfList
-              .filter((etf) => {
-                const matchData = etf.has_enough_data !== false;
-                const search = benchmarkSearch.toLowerCase();
-                const matchSearch = !search || etf.code.toLowerCase().includes(search) || etf.name.toLowerCase().includes(search);
-                return matchData && matchSearch;
-              })
-              .map((etf) => (
-                <option key={etf.code} value={etf.code}>
-                  {etf.code} {etf.name}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <input
+              type="text"
+              placeholder="搜索基准ETF..."
+              value={benchmarkSearch}
+              onChange={(e) => setBenchmarkSearch(e.target.value)}
+              className="optimizer-search-input"
+              style={{ width: '120px', height: '30px', fontSize: '12px' }}
+            />
+            <select
+              value={benchmarkCode}
+              onChange={(e) => setBenchmarkCode(e.target.value)}
+              className="optimizer-category-select"
+              title="基准ETF"
+            >
+              {etfList
+                .filter((etf) => {
+                  const matchData = etf.has_enough_data !== false;
+                  const search = benchmarkSearch.toLowerCase();
+                  const matchSearch = !search || etf.code.toLowerCase().includes(search) || etf.name.toLowerCase().includes(search);
+                  return matchData && matchSearch;
+                })
+                .map((etf) => (
+                  <option key={etf.code} value={etf.code}>
+                    {etf.code} {etf.name}
+                  </option>
+                ))}
+            </select>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <select
+              value={timeRange}
+              onChange={(e) => setTimeRange(e.target.value as TimeRange)}
+              className="optimizer-category-select"
+            >
+              {TIME_RANGES.map((tr) => (
+                <option key={tr.value} value={tr.value}>
+                  {tr.label}
                 </option>
               ))}
-          </select>
-          <button
-            className="btn-secondary"
-            onClick={handleSync}
-            disabled={syncing}
-          >
-            {syncing ? '同步中...' : '同步数据'}
-          </button>
-          {syncMsg && <span className="sync-message">{syncMsg}</span>}
+            </select>
+            <button
+              className="btn-secondary"
+              onClick={handleSync}
+              disabled={syncing}
+            >
+              {syncing ? '同步中...' : '同步数据'}
+            </button>
+            {syncMsg && <span className="sync-message">{syncMsg}</span>}
+          </div>
         </div>
 
         {viewMode === 'single' && Object.keys(currentWeights).length > 0 && (
