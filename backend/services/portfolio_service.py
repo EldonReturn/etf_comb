@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 RISK_FREE_RATE = 0.03
 TRADING_DAYS_PER_YEAR = 252
+BENCHMARK_ETF_CODE = "510310.SH"
 
 
 def period_to_days(period: Optional[str]) -> int:
@@ -174,7 +175,7 @@ def calculate_returns_from_nav(nav_series: List[float]) -> List[float]:
     示例:
         >>> nav = [1.0, 1.02, 1.01, 1.05]
         >>> returns = calculate_returns_from_nav(nav)
-        >>> print(returns)  # [nan, 0.02, -0.0098, 0.0396]
+        >>> print(returns)  # [0.02, -0.0098, 0.0396]
     """
     if len(nav_series) < 2:
         return [float('nan')]
@@ -348,7 +349,7 @@ def calculate_portfolio_metrics(daily_returns: List[float],
         )
 
     total_return = (nav_series[-1] - nav_series[0]) / nav_series[0]
-    annualized_return = calculate_annualized_return(total_return, len(nav_series))
+    annualized_return = calculate_annualized_return(total_return, len(daily_returns))
     volatility = calculate_volatility(daily_returns)
 
     risk_free_rate = RISK_FREE_RATE
@@ -461,7 +462,7 @@ def calculate_single_etf_metrics(session: Session, code: str, name: str,
 
     daily_returns = calculate_returns_from_nav(nav_series)
     total_return = (nav_series[-1] - nav_series[0]) / nav_series[0]
-    annualized_return = calculate_annualized_return(total_return, len(nav_series))
+    annualized_return = calculate_annualized_return(total_return, len(daily_returns))
     volatility = calculate_volatility(daily_returns)
     sharpe_ratio = calculate_sharpe_ratio(annualized_return, volatility)
     max_drawdown, _ = calculate_max_drawdown(nav_series)
@@ -480,7 +481,8 @@ def calculate_single_etf_metrics(session: Session, code: str, name: str,
 
 def evaluate_portfolio(weights: Dict[str, float],
                         session: Optional[Session] = None,
-                        period: Optional[str] = None) -> Dict:
+                        period: Optional[str] = None,
+                        benchmark_code: Optional[str] = None) -> Dict:
     """
     评估组合业绩
 
@@ -489,6 +491,7 @@ def evaluate_portfolio(weights: Dict[str, float],
             示例: {"510300": 0.5, "510500": 0.5}
         session: 数据库会话（可选）
         period: 时间区段字符串，如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'（可选）
+        benchmark_code: 基准ETF代码（可选，默认510310）
 
     返回:
         Dict: 组合业绩指标字典
@@ -501,14 +504,18 @@ def evaluate_portfolio(weights: Dict[str, float],
     days = period_to_days(period)
 
     try:
-        etf_codes = list(weights.keys())
-        etf_weights = list(weights.values())
+        etf_codes_all = list(weights.keys())
+        etf_weights_all = list(weights.values())
 
         etf_navs_list = []
-        for code in etf_codes:
+        valid_codes = []
+        valid_weights = []
+        for code, w in zip(etf_codes_all, etf_weights_all):
             navs = get_etf_nav_series(session, code, days)
             if navs:
                 etf_navs_list.append(navs)
+                valid_codes.append(code)
+                valid_weights.append(w)
 
         if not etf_navs_list:
             return {
@@ -523,19 +530,20 @@ def evaluate_portfolio(weights: Dict[str, float],
                 "etf_metrics": {}
             }
 
-        nav_dates = get_etf_nav_dates(session, etf_codes[0], days)[-len(etf_navs_list[0]):] if etf_navs_list else []
-        benchmark_navs = get_etf_nav_series(session, "510350.SH", days) if len(weights) > 0 else []
+        nav_dates = get_etf_nav_dates(session, valid_codes[0], days)[-len(etf_navs_list[0]):] if etf_navs_list else []
+        benchmark_etf = benchmark_code or BENCHMARK_ETF_CODE
+        benchmark_navs_raw = get_etf_nav_series(session, benchmark_etf, days) if len(valid_codes) > 0 else []
         min_len = min(len(navs) for navs in etf_navs_list) if etf_navs_list else 0
-        benchmark_navs = benchmark_navs[-min_len:] if len(benchmark_navs) > min_len else benchmark_navs
-        nav_dates = nav_dates[-min_len:] if len(nav_dates) > min_len else nav_dates
+        benchmark_navs = benchmark_navs_raw[-min_len:] if len(benchmark_navs_raw) >= min_len else benchmark_navs_raw
+        nav_dates = nav_dates[-min_len:] if len(nav_dates) >= min_len else nav_dates
 
         normalized_navs_list = [navs[-min_len:] for navs in etf_navs_list]
 
         portfolio_navs = []
         for i in range(min_len):
             portfolio_value = sum(
-                normalized_navs_list[j][i] * etf_weights[j]
-                for j in range(len(etf_codes))
+                normalized_navs_list[j][i] * valid_weights[j]
+                for j in range(len(valid_codes))
             )
             portfolio_navs.append(portfolio_value)
 
@@ -543,27 +551,27 @@ def evaluate_portfolio(weights: Dict[str, float],
         metrics = calculate_portfolio_metrics(daily_returns, portfolio_navs, nav_dates, benchmark_navs)
 
         etf_metrics = {}
-        for i, code in enumerate(etf_codes):
+        for i, code in enumerate(valid_codes):
             if i >= len(normalized_navs_list) or len(normalized_navs_list[i]) < 2:
                 continue
 
             nav_data = normalized_navs_list[i]
             etf_returns = calculate_returns_from_nav(nav_data)
             etf_total_ret = (nav_data[-1] - nav_data[0]) / nav_data[0]
-            etf_ann_ret = calculate_annualized_return(etf_total_ret, len(nav_data))
+            etf_ann_ret = calculate_annualized_return(etf_total_ret, len(etf_returns))
             etf_vol = calculate_volatility(etf_returns)
             etf_sharpe = calculate_sharpe_ratio(etf_ann_ret, etf_vol)
             etf_mdd, _ = calculate_max_drawdown(nav_data)
 
-            etf_info = session.query(ETFNavHistory).filter(
+            etf_info_record = session.query(ETFNavHistory).filter(
                 ETFNavHistory.etf_code == code
             ).first()
-            name = etf_info.etf_info.name if etf_info else code
+            name = etf_info_record.etf_info.name if etf_info_record and etf_info_record.etf_info else code
 
             etf_metrics[code] = {
                 "code": code,
                 "name": name,
-                "weight": etf_weights[i],
+                "weight": valid_weights[i],
                 "total_return": etf_total_ret * 100,
                 "annualized_return": etf_ann_ret * 100,
                 "volatility": etf_vol * 100,
@@ -571,10 +579,10 @@ def evaluate_portfolio(weights: Dict[str, float],
                 "max_drawdown": etf_mdd * 100
             }
 
-        benchmark_info = session.query(ETFNavHistory).filter(
-            ETFNavHistory.etf_code == "510350.SH"
+        benchmark_record = session.query(ETFNavHistory).filter(
+            ETFNavHistory.etf_code == benchmark_etf
         ).first()
-        benchmark_name = benchmark_info.etf_info.name if benchmark_info else "510350.SH"
+        benchmark_name = benchmark_record.etf_info.name if benchmark_record and benchmark_record.etf_info else benchmark_etf
 
         return {
             "total_return": metrics.total_return,
@@ -586,7 +594,7 @@ def evaluate_portfolio(weights: Dict[str, float],
             "nav_series": metrics.nav_series,
             "nav_dates": metrics.nav_dates,
             "benchmark_nav_series": benchmark_navs,
-            "benchmark_code": "510350.SH",
+            "benchmark_code": BENCHMARK_ETF_CODE,
             "benchmark_name": benchmark_name,
             "daily_returns": metrics.daily_returns,
             "etf_metrics": etf_metrics
@@ -597,7 +605,8 @@ def evaluate_portfolio(weights: Dict[str, float],
 
 
 def compare_portfolios(portfolios: List[Dict[str, float]],
-                       period: Optional[str] = None) -> List[Dict]:
+                       period: Optional[str] = None,
+                       benchmark_code: Optional[str] = None) -> List[Dict]:
     """
     比较多个组合的业绩
 
@@ -608,13 +617,14 @@ def compare_portfolios(portfolios: List[Dict[str, float]],
                 {"510300": 1.0}
             ]
         period: 时间区段字符串，如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'（可选）
+        benchmark_code: 基准ETF代码（可选）
 
     返回:
         List[Dict]: 每个组合的业绩指标列表
     """
     results = []
     for i, weights in enumerate(portfolios):
-        metrics = evaluate_portfolio(weights, period=period)
+        metrics = evaluate_portfolio(weights, period=period, benchmark_code=benchmark_code)
         metrics["portfolio_id"] = i + 1
         metrics["portfolio_name"] = f"组合{i + 1}"
         results.append(metrics)

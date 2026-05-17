@@ -507,7 +507,7 @@ describe('OptimizerPanel 组件', () => {
   const mockAvailableETFs = mockETFList.etfs;
 
   it('应渲染可勾选ETF列表', () => {
-    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} />);
+    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} selectedETFs={[]} onSelectionChange={vi.fn()} />);
 
     const checkboxes = screen.getAllByRole('checkbox');
     expect(checkboxes).toHaveLength(4);
@@ -517,13 +517,13 @@ describe('OptimizerPanel 组件', () => {
   });
 
   it('应显示"已选择: N 只ETF"计数', () => {
-    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} />);
+    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} selectedETFs={[]} onSelectionChange={vi.fn()} />);
 
     expect(screen.getByText('已选择: 0 只ETF')).toBeInTheDocument();
   });
 
   it('勾选ETF后计数应更新', () => {
-    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} />);
+    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} selectedETFs={[]} onSelectionChange={vi.fn()} />);
 
     const checkboxes = screen.getAllByRole('checkbox');
     fireEvent.click(checkboxes[0]);
@@ -533,7 +533,7 @@ describe('OptimizerPanel 组件', () => {
   });
 
   it('"全选"按钮应勾选所有ETF', () => {
-    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} />);
+    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} selectedETFs={[]} onSelectionChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: '全选' }));
 
@@ -543,7 +543,7 @@ describe('OptimizerPanel 组件', () => {
   });
 
   it('全选后按钮文字应变为"取消全选"', () => {
-    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} />);
+    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} selectedETFs={[]} onSelectionChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: '全选' }));
 
@@ -551,7 +551,7 @@ describe('OptimizerPanel 组件', () => {
   });
 
   it('"取消全选"应取消所有勾选', () => {
-    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} />);
+    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} selectedETFs={[]} onSelectionChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: '全选' }));
     fireEvent.click(screen.getByRole('button', { name: '取消全选' }));
@@ -562,7 +562,7 @@ describe('OptimizerPanel 组件', () => {
   });
 
   it('应渲染约束输入框（最大权重、目标波动率）', () => {
-    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} />);
+    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} selectedETFs={[]} onSelectionChange={vi.fn()} />);
 
     const spinbuttons = screen.getAllByRole('spinbutton');
     expect(spinbuttons).toHaveLength(2);
@@ -571,21 +571,21 @@ describe('OptimizerPanel 组件', () => {
   });
 
   it('少于2只ETF时"开始优化"按钮应禁用', () => {
-    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} />);
+    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} selectedETFs={[]} onSelectionChange={vi.fn()} />);
 
     const optimizeBtn = screen.getByRole('button', { name: '开始优化' });
     expect(optimizeBtn).toBeDisabled();
   });
 
   it('少于2只ETF时"开始优化"按钮应禁用（防止无效请求）', () => {
-    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} />);
+    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} selectedETFs={[]} onSelectionChange={vi.fn()} />);
 
     const optimizeBtn = screen.getByRole('button', { name: '开始优化' });
     expect(optimizeBtn).toBeDisabled();
   });
 
   it('选择2只及以上ETF时"开始优化"应可用', () => {
-    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} />);
+    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} selectedETFs={[]} onSelectionChange={vi.fn()} />);
 
     fireEvent.click(screen.getAllByRole('checkbox')[0]);
     fireEvent.click(screen.getAllByRole('checkbox')[1]);
@@ -598,7 +598,7 @@ describe('OptimizerPanel 组件', () => {
       () => new Promise(() => {}),
     );
 
-    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} />);
+    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} selectedETFs={[]} onSelectionChange={vi.fn()} />);
 
     fireEvent.click(screen.getAllByRole('checkbox')[0]);
     fireEvent.click(screen.getAllByRole('checkbox')[1]);
@@ -613,7 +613,7 @@ describe('OptimizerPanel 组件', () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(mockFetchSuccess(mockOptimizationResult));
     const onOptimized = vi.fn();
 
-    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={onOptimized} />);
+    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={onOptimized} selectedETFs={[]} onSelectionChange={vi.fn()} />);
 
     fireEvent.click(screen.getAllByRole('checkbox')[0]);
     fireEvent.click(screen.getAllByRole('checkbox')[1]);
@@ -636,7 +636,7 @@ describe('OptimizerPanel 组件', () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(mockFetchSuccess(mockOptimizationResult));
     const onOptimized = vi.fn();
 
-    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={onOptimized} />);
+    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={onOptimized} selectedETFs={[]} onSelectionChange={vi.fn()} />);
 
     fireEvent.click(screen.getAllByRole('checkbox')[0]);
     fireEvent.click(screen.getAllByRole('checkbox')[1]);
@@ -654,7 +654,7 @@ describe('OptimizerPanel 组件', () => {
       mockFetchSuccess({ ...mockOptimizationResult, success: false, message: '数据不足' }),
     );
 
-    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} />);
+    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} selectedETFs={[]} onSelectionChange={vi.fn()} />);
 
     fireEvent.click(screen.getAllByRole('checkbox')[0]);
     fireEvent.click(screen.getAllByRole('checkbox')[1]);
@@ -673,7 +673,7 @@ describe('OptimizerPanel 组件', () => {
       status: 500,
     });
 
-    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} />);
+    render(<OptimizerPanel availableETFs={mockAvailableETFs} onOptimized={vi.fn()} selectedETFs={[]} onSelectionChange={vi.fn()} />);
 
     fireEvent.click(screen.getAllByRole('checkbox')[0]);
     fireEvent.click(screen.getAllByRole('checkbox')[1]);
@@ -685,7 +685,7 @@ describe('OptimizerPanel 组件', () => {
   });
 
   it('空ETF列表应渲染无勾选项', () => {
-    render(<OptimizerPanel availableETFs={[]} onOptimized={vi.fn()} />);
+    render(<OptimizerPanel availableETFs={[]} onOptimized={vi.fn()} selectedETFs={[]} onSelectionChange={vi.fn()} />);
 
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
     expect(screen.getByText('已选择: 0 只ETF')).toBeInTheDocument();
@@ -983,7 +983,7 @@ describe('边界条件', () => {
     const fetchSpy = vi.fn().mockResolvedValueOnce(mockFetchSuccess(mockOptimizationResult));
     globalThis.fetch = fetchSpy as unknown as typeof fetch;
 
-    render(<OptimizerPanel availableETFs={mockETFList.etfs.slice(0, 2)} onOptimized={onOptimized} />);
+    render(<OptimizerPanel availableETFs={mockETFList.etfs.slice(0, 2)} onOptimized={onOptimized} selectedETFs={[]} onSelectionChange={vi.fn()} />);
 
     const inputs = screen.getAllByRole('spinbutton');
     fireEvent.change(inputs[0], { target: { value: '30' } });
@@ -1046,7 +1046,7 @@ describe('可访问性', () => {
   });
 
   it('优化按钮禁用时应为disabled状态', () => {
-    render(<OptimizerPanel availableETFs={mockETFList.etfs.slice(0, 1)} onOptimized={vi.fn()} />);
+    render(<OptimizerPanel availableETFs={mockETFList.etfs.slice(0, 1)} onOptimized={vi.fn()} selectedETFs={[]} onSelectionChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: '开始优化' })).toBeDisabled();
   });

@@ -8,7 +8,7 @@
  * - 底部：多组合对比
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { ETFInfo, Weights } from './api';
 import { ETFSelector, PortfolioCard, CompareTable, OptimizerPanel } from './components';
 import './App.css';
@@ -36,6 +36,7 @@ function App() {
   const [timeRange, setTimeRange] = useState<TimeRange>('1y');
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [benchmarkCode, setBenchmarkCode] = useState<string>('510310');
 
   useEffect(() => {
     const fetchETFList = async () => {
@@ -62,9 +63,9 @@ function App() {
     setOptimizerSelected(Object.keys(weights));
   };
 
-  const handleOptimizerSelectionChange = (codes: string[]) => {
+  const handleOptimizerSelectionChange = useCallback((codes: string[]) => {
     setOptimizerSelected(codes);
-  };
+  }, []);
 
   const handleSavePortfolio = () => {
     if (Object.keys(currentWeights).length > 0) {
@@ -133,6 +134,20 @@ function App() {
               </option>
             ))}
           </select>
+          <select
+            value={benchmarkCode}
+            onChange={(e) => setBenchmarkCode(e.target.value)}
+            className="optimizer-category-select"
+            title="基准ETF"
+          >
+            {etfList
+              .filter((etf) => etf.has_enough_data !== false)
+              .map((etf) => (
+                <option key={etf.code} value={etf.code}>
+                  基准: {etf.code} {etf.name}
+                </option>
+              ))}
+          </select>
           <button
             className="btn-secondary"
             onClick={handleSync}
@@ -157,11 +172,11 @@ function App() {
 
         <section className="main-content">
           {viewMode === 'single' ? (
-            <PortfolioCard weights={currentWeights} name="当前组合" timeRange={timeRange} />
+            <PortfolioCard weights={currentWeights} name="当前组合" timeRange={timeRange} benchmarkCode={benchmarkCode} />
           ) : (
             <div className="compare-mode-content">
               <div className="current-portfolio">
-                <PortfolioCard weights={currentWeights} name="当前组合" timeRange={timeRange} />
+                <PortfolioCard weights={currentWeights} name="当前组合" timeRange={timeRange} benchmarkCode={benchmarkCode} />
               </div>
 
               {savedPortfolios.length > 0 && (
@@ -169,6 +184,7 @@ function App() {
                   portfolios={[currentWeights, ...savedPortfolios]}
                   onRemove={handleRemovePortfolio}
                   timeRange={timeRange}
+                  benchmarkCode={benchmarkCode}
                 />
               )}
             </div>
@@ -197,10 +213,11 @@ function App() {
                 id={index + 1}
                 name={`已保存组合${index + 1}`}
                 timeRange={timeRange}
+                benchmarkCode={benchmarkCode}
               />
             ))}
           </div>
-          <CompareTable portfolios={savedPortfolios} onRemove={handleRemovePortfolio} timeRange={timeRange} />
+          <CompareTable portfolios={savedPortfolios} onRemove={handleRemovePortfolio} timeRange={timeRange} benchmarkCode={benchmarkCode} />
         </section>
       )}
     </div>

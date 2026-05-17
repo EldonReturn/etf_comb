@@ -115,6 +115,11 @@ class PortfolioEvaluateRequest(BaseModel):
         description="时间区段，如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'",
         example="1y"
     )
+    benchmark_code: Optional[str] = Field(
+        None,
+        description="基准ETF代码，默认510310",
+        example="510310"
+    )
 
 
 class PortfolioCompareRequest(BaseModel):
@@ -131,6 +136,11 @@ class PortfolioCompareRequest(BaseModel):
         None,
         description="时间区段，如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'",
         example="1y"
+    )
+    benchmark_code: Optional[str] = Field(
+        None,
+        description="基准ETF代码，默认510310",
+        example="510310"
     )
 
 
@@ -281,7 +291,7 @@ async def evaluate_portfolio_api(request: PortfolioEvaluateRequest):
         组合业绩指标
     """
     try:
-        result = evaluate_portfolio(request.weights, period=request.period)
+        result = evaluate_portfolio(request.weights, period=request.period, benchmark_code=request.benchmark_code)
         return result
     except Exception as e:
         logger.error(f"组合评估失败: {e}")
@@ -302,7 +312,7 @@ async def compare_portfolios_api(request: PortfolioCompareRequest):
         多个组合的业绩指标列表
     """
     try:
-        results = compare_portfolios(request.portfolios, period=request.period)
+        results = compare_portfolios(request.portfolios, period=request.period, benchmark_code=request.benchmark_code)
         return {"portfolios": results}
     except Exception as e:
         logger.error(f"组合对比失败: {e}")
@@ -323,11 +333,12 @@ async def optimize_portfolio_api(request: OptimizeRequest):
         最优组合的权重和预期业绩指标
     """
     try:
-        if request.max_weight or request.target_volatility:
+        has_constraints = request.max_weight is not None or request.target_volatility is not None
+        if has_constraints:
             result = optimize_with_constraints(
                 etf_codes=request.etf_codes,
-                max_weight=request.max_weight / 100 if request.max_weight else None,
-                target_volatility=request.target_volatility / 100 if request.target_volatility else None,
+                max_weight=request.max_weight / 100 if request.max_weight is not None else None,
+                target_volatility=request.target_volatility / 100 if request.target_volatility is not None else None,
                 period=request.period,
             )
         else:

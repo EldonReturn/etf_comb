@@ -17,6 +17,7 @@ interface CompareTableProps {
   portfolios: Weights[];
   onRemove?: (index: number) => void;
   timeRange?: string;
+  benchmarkCode?: string;
 }
 
 type CompareView = 'table' | 'bar' | 'radar';
@@ -26,7 +27,7 @@ interface PortfolioResult extends PortfolioMetrics {
   portfolioName: string;
 }
 
-export function CompareTable({ portfolios, onRemove, timeRange = '1y' }: CompareTableProps) {
+export function CompareTable({ portfolios, onRemove, timeRange = '1y', benchmarkCode = '510310' }: CompareTableProps) {
   const [results, setResults] = useState<PortfolioResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +46,7 @@ export function CompareTable({ portfolios, onRemove, timeRange = '1y' }: Compare
         const response = await fetch('/api/portfolio/compare', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ portfolios, period: timeRange }),
+          body: JSON.stringify({ portfolios, period: timeRange, benchmark_code: benchmarkCode }),
         });
         if (!response.ok) throw new Error('对比失败');
         const data = await response.json();

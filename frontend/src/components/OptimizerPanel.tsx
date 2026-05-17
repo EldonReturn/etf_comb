@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import type { ETFInfo, OptimizationResult, Weights } from '../api';
+import { optimizePortfolio } from '../api';
 
 const CATEGORIES = ['全部', '宽基指数', '行业指数', '债券', '商品', '境外'];
 
@@ -50,12 +51,13 @@ export function OptimizerPanel({ availableETFs, onOptimized, timeRange = '1y', s
     onSelectionChange(newSelected);
   };
 
+  const selectable = useMemo(() => {
+    return filteredETFs.filter((etf) => etf.has_enough_data !== false).map((etf) => etf.code);
+  }, [filteredETFs]);
+
   const handleSelectAll = () => {
-    const selectable = filteredETFs.filter((etf) => etf.has_enough_data !== false).map((etf) => etf.code);
-    const newSelected = selectedETFs.length === selectable.length
-      ? []
-      : selectable;
-    onSelectionChange(newSelected);
+    const allSelected = selectable.every((c) => selectedETFs.includes(c));
+    onSelectionChange(allSelected ? [] : selectable);
   };
 
   const handleSelectByCategory = (cat: string) => {
@@ -80,23 +82,7 @@ export function OptimizerPanel({ availableETFs, onOptimized, timeRange = '1y', s
     setResult(null);
 
     try {
-      const response = await fetch('/api/portfolio/optimize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          etf_codes: selectedETFs,
-          max_weight: maxWeight,
-          target_volatility: targetVolatility,
-          period: timeRange,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || '优化失败');
-      }
-
-      const data: OptimizationResult = await response.json();
+      const data = await optimizePortfolio(selectedETFs, maxWeight, targetVolatility, timeRange);
       setResult(data);
 
       if (data.success && data.weights) {
@@ -126,7 +112,7 @@ export function OptimizerPanel({ availableETFs, onOptimized, timeRange = '1y', s
           <div className="section-header">
             <h4>选择ETF范围</h4>
             <button className="btn-text" onClick={handleSelectAll}>
-              {selectedETFs.length === filteredETFs.length ? '取消全选' : '全选'}
+              {selectable.every((c) => selectedETFs.includes(c)) ? '取消全选' : '全选'}
             </button>
           </div>
 

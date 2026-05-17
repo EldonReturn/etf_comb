@@ -94,6 +94,7 @@ def calculate_covariance_matrix(returns_list: List[List[float]]) -> np.ndarray:
 
     min_len = min(len(r) for r in returns_list)
     aligned_returns = np.array([r[-min_len:] for r in returns_list])
+    aligned_returns = aligned_returns[:, ~np.isnan(aligned_returns).any(axis=0)]
 
     cov_matrix = np.cov(aligned_returns, rowvar=True)
 
@@ -150,30 +151,6 @@ def portfolio_volatility(weights: np.ndarray, cov_matrix: np.ndarray) -> float:
     return np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
 
 
-def negative_sharpe_ratio(weights: np.ndarray, returns: np.ndarray,
-                            cov_matrix: np.ndarray, risk_free: float = 0.03) -> float:
-    """
-    计算负夏普比率（用于最小化）
-
-    优化时最小化负夏普比率等同于最大化夏普比率。
-
-    参数:
-        weights: 权重数组
-        returns: 各ETF年化收益率数组
-        cov_matrix: 协方差矩阵
-        risk_free: 无风险利率
-
-    返回:
-        float: 负夏普比率
-    """
-    p_return = portfolio_return(weights, returns)
-    p_volatility = portfolio_volatility(weights, cov_matrix)
-    if p_volatility == 0:
-        return 0.0
-    sharpe = (p_return - risk_free) / p_volatility
-    return -sharpe
-
-
 def maximize_return_objective(weights: np.ndarray, returns: np.ndarray,
                                cov_matrix: np.ndarray, risk_aversion: float) -> float:
     """
@@ -193,7 +170,7 @@ def maximize_return_objective(weights: np.ndarray, returns: np.ndarray,
         float: 目标函数值（最小化）
     """
     p_return = portfolio_return(weights, returns)
-    p_volatility_sq = np.dot(weights.T, np.dot(cov_matrix, weights))
+    p_volatility_sq = np.dot(weights.T, np.dot(cov_matrix, weights)) * 252
 
     objective = -(p_return - risk_aversion * p_volatility_sq)
     return objective
@@ -326,6 +303,9 @@ def optimize_max_return(etf_codes: List[str],
         }
 
         weights_dict = {k: v for k, v in weights_dict.items() if v > 1e-6}
+        if weights_dict:
+            total = sum(weights_dict.values())
+            weights_dict = {k: v / total for k, v in weights_dict.items()}
 
         expected_return = portfolio_return(optimal_weights, np.array(annual_returns))
         volatility = portfolio_volatility(optimal_weights, cov_matrix) * np.sqrt(252)
@@ -438,7 +418,7 @@ def optimize_with_constraints(etf_codes: List[str],
         n = len(valid_codes)
         initial_weights = np.ones(n) / n
 
-        bounds = [(0, max_weight) for _ in range(n)] if max_weight else [(0, 1) for _ in range(n)]
+        bounds = [(0, max_weight) for _ in range(n)] if max_weight is not None else [(0, 1) for _ in range(n)]
 
         constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1}]
 
@@ -478,6 +458,9 @@ def optimize_with_constraints(etf_codes: List[str],
         }
 
         weights_dict = {k: v for k, v in weights_dict.items() if v > 1e-6}
+        if weights_dict:
+            total = sum(weights_dict.values())
+            weights_dict = {k: v / total for k, v in weights_dict.items()}
 
         expected_return = portfolio_return(optimal_weights, np.array(annual_returns))
         volatility = portfolio_volatility(optimal_weights, cov_matrix) * np.sqrt(252)

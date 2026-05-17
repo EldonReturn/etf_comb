@@ -86,36 +86,31 @@ export function ETFSelector({ selectedETFs, onChange, period }: ETFSelectorProps
   };
 
   const handleWeightChange = (code: string, newWeight: number) => {
-    const newWeights = { ...selectedETFs };
-    const oldWeight = newWeights[code] || 0;
-    const diff = newWeight - oldWeight;
+    const clamped = Math.max(0, Math.min(1, newWeight));
+    const remaining = 1 - clamped;
+    const otherKeys = Object.keys(selectedETFs).filter((k) => k !== code);
 
-    if (diff > 0) {
-      const otherKeys = Object.keys(newWeights).filter((k) => k !== code);
-      if (otherKeys.length > 0) {
-        const reduceAmount = diff / otherKeys.length;
-        otherKeys.forEach((k) => {
-          newWeights[k] = Math.max(0, newWeights[k] - reduceAmount);
-        });
-      }
-    } else {
-      const otherKeys = Object.keys(newWeights).filter((k) => k !== code);
-      if (otherKeys.length > 0) {
-        const addAmount = -diff / otherKeys.length;
-        otherKeys.forEach((k) => {
-          newWeights[k] = Math.max(0, newWeights[k] + addAmount);
-        });
-      }
+    if (remaining <= 0 || otherKeys.length === 0) {
+      onChange({ [code]: 1 });
+      return;
     }
 
-    newWeights[code] = Math.max(0, Math.min(1, newWeight));
-    const total = Object.values(newWeights).reduce((a, b) => a + b, 0);
-    if (total > 0) {
-      Object.keys(newWeights).forEach((k) => {
-        newWeights[k] = newWeights[k] / total;
+    const otherTotal = otherKeys.reduce((sum, k) => sum + (selectedETFs[k] || 0), 0);
+    const newWeights: Weights = {};
+
+    if (otherTotal > 0) {
+      const scale = remaining / otherTotal;
+      otherKeys.forEach((k) => {
+        newWeights[k] = selectedETFs[k] * scale;
+      });
+    } else {
+      const equal = remaining / otherKeys.length;
+      otherKeys.forEach((k) => {
+        newWeights[k] = equal;
       });
     }
 
+    newWeights[code] = clamped;
     onChange(newWeights);
   };
 

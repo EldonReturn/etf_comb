@@ -19,6 +19,7 @@ interface PortfolioCardProps {
   id?: number;
   name?: string;
   timeRange?: string;
+  benchmarkCode?: string;
 }
 
 type MetricCardProps = {
@@ -47,7 +48,7 @@ function MetricCard({ label, value, suffix = '', color }: MetricCardProps) {
   );
 }
 
-export function PortfolioCard({ weights, id, name, timeRange = '1y' }: PortfolioCardProps) {
+export function PortfolioCard({ weights, id, name, timeRange = '1y', benchmarkCode = '510310' }: PortfolioCardProps) {
   const [metrics, setMetrics] = useState<PortfolioMetrics | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +67,7 @@ export function PortfolioCard({ weights, id, name, timeRange = '1y' }: Portfolio
         const response = await fetch('/api/portfolio/evaluate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ weights, period: timeRange }),
+          body: JSON.stringify({ weights, period: timeRange, benchmark_code: benchmarkCode }),
         });
         if (!response.ok) throw new Error('评估失败');
         const data = await response.json();
@@ -90,6 +91,7 @@ export function PortfolioCard({ weights, id, name, timeRange = '1y' }: Portfolio
       index,
       value: nav,
     }));
+    const safeLen = Math.max(navData.length - 1, 1);
 
     const benchmarkNavData = (metrics.benchmark_nav_series || []).map((nav, index) => ({
       index,
@@ -110,7 +112,7 @@ export function PortfolioCard({ weights, id, name, timeRange = '1y' }: Portfolio
       return `${yy}${mm}${dd}`;
     };
     if (navData.length > 0) {
-      const totalLen = navData.length - 1 || 1;
+      const totalLen = safeLen || 1;
       if (navData.length === 1) {
         xLabels.push({
           index: 0,
@@ -122,9 +124,9 @@ export function PortfolioCard({ weights, id, name, timeRange = '1y' }: Portfolio
           label: metrics.nav_dates?.[0] ? formatDate(metrics.nav_dates[0]) : '1',
         });
         xLabels.push({
-          index: navData.length - 1,
-          label: metrics.nav_dates?.[navData.length - 1]
-            ? formatDate(metrics.nav_dates[navData.length - 1])
+          index: safeLen,
+          label: metrics.nav_dates?.[safeLen]
+            ? formatDate(metrics.nav_dates[safeLen])
             : `${navData.length}`,
         });
       }
@@ -157,8 +159,8 @@ export function PortfolioCard({ weights, id, name, timeRange = '1y' }: Portfolio
         <line x1="50" y1="190" x2="535" y2="190" stroke="var(--border)" strokeWidth="1" />
         {xLabels.map(({ index, label }) => (
           <g key={index}>
-            <line x1={50 + (index / (navData.length - 1)) * 485} y1="190" x2={50 + (index / (navData.length - 1)) * 485} y2="193" stroke="var(--border)" strokeWidth="1" />
-            <text x={50 + (index / (navData.length - 1)) * 485} y="205" fontSize="10" fill="var(--text-light)" textAnchor="middle">{label}</text>
+            <line x1={50 + (index / (safeLen)) * 485} y1="190" x2={50 + (index / (safeLen)) * 485} y2="193" stroke="var(--border)" strokeWidth="1" />
+            <text x={50 + (index / (safeLen)) * 485} y="205" fontSize="10" fill="var(--text-light)" textAnchor="middle">{label}</text>
           </g>
         ))}
         {yLabels.map(({ value, y }) => (
@@ -175,7 +177,7 @@ export function PortfolioCard({ weights, id, name, timeRange = '1y' }: Portfolio
         ))}
         {benchmarkNavData.length > 0 && (
           <polyline
-            points={benchmarkNavData.map((d) => `${50 + (d.index / (navData.length - 1)) * 485},${190 - ((d.value - minNav) / valueRange) * 170}`).join(' ')}
+            points={benchmarkNavData.map((d) => `${50 + (d.index / (safeLen)) * 485},${190 - ((d.value - minNav) / valueRange) * 170}`).join(' ')}
             fill="none"
             stroke="#555"
             strokeWidth="2"
@@ -183,14 +185,14 @@ export function PortfolioCard({ weights, id, name, timeRange = '1y' }: Portfolio
         )}
         {excessValues.length > 0 && (
           <polyline
-            points={excessValues.map((v, i) => `${50 + (i / (navData.length - 1)) * 485},${190 - ((v / excessRange) + 1) * 85}`).join(' ')}
+            points={excessValues.map((v, i) => `${50 + (i / (safeLen)) * 485},${190 - ((v / excessRange) + 1) * 85}`).join(' ')}
             fill="none"
             stroke="#9b59b6"
             strokeWidth="2"
           />
         )}
         <polyline
-          points={navData.map((d) => `${50 + (d.index / (navData.length - 1)) * 485},${190 - ((d.value - minNav) / valueRange) * 170}`).join(' ')}
+          points={navData.map((d) => `${50 + (d.index / (safeLen)) * 485},${190 - ((d.value - minNav) / valueRange) * 170}`).join(' ')}
           fill="none"
           stroke="#e74c3c"
           strokeWidth="2"
@@ -217,6 +219,7 @@ export function PortfolioCard({ weights, id, name, timeRange = '1y' }: Portfolio
     }
 
     const maxDD = Math.min(...drawdownData.map((d) => d.value));
+    const safeDdLen = Math.max(drawdownData.length - 1, 1);
 
     const xLabels = [];
     const formatDate = (dateStr: string) => {
@@ -238,9 +241,9 @@ export function PortfolioCard({ weights, id, name, timeRange = '1y' }: Portfolio
           label: metrics.nav_dates?.[0] ? formatDate(metrics.nav_dates[0]) : '1',
         });
         xLabels.push({
-          index: drawdownData.length - 1,
-          label: metrics.nav_dates?.[drawdownData.length - 1]
-            ? formatDate(metrics.nav_dates[drawdownData.length - 1])
+          index: safeDdLen,
+          label: metrics.nav_dates?.[safeDdLen]
+            ? formatDate(metrics.nav_dates[safeDdLen])
             : `${drawdownData.length}`,
         });
       }
@@ -258,8 +261,8 @@ export function PortfolioCard({ weights, id, name, timeRange = '1y' }: Portfolio
         <line x1="50" y1="190" x2="535" y2="190" stroke="var(--border)" strokeWidth="1" />
         {xLabels.map(({ index, label }) => (
           <g key={index}>
-            <line x1={50 + (index / (drawdownData.length - 1)) * 485} y1="190" x2={50 + (index / (drawdownData.length - 1)) * 485} y2="193" stroke="var(--border)" strokeWidth="1" />
-            <text x={50 + (index / (drawdownData.length - 1)) * 485} y="205" fontSize="10" fill="var(--text-light)" textAnchor="middle">{label}</text>
+            <line x1={50 + (index / (safeDdLen)) * 485} y1="190" x2={50 + (index / (safeDdLen)) * 485} y2="193" stroke="var(--border)" strokeWidth="1" />
+            <text x={50 + (index / (safeDdLen)) * 485} y="205" fontSize="10" fill="var(--text-light)" textAnchor="middle">{label}</text>
           </g>
         ))}
         {yLabels.map(({ value, y }) => (
@@ -269,7 +272,7 @@ export function PortfolioCard({ weights, id, name, timeRange = '1y' }: Portfolio
           </g>
         ))}
         <polyline
-          points={drawdownData.map((d) => `${50 + (d.index / (drawdownData.length - 1)) * 485},${190 - (Math.abs(d.value) / Math.abs(maxDD || 1)) * 170}`).join(' ')}
+          points={drawdownData.map((d) => `${50 + (d.index / (safeDdLen)) * 485},${190 - (Math.abs(d.value) / Math.abs(maxDD || 1)) * 170}`).join(' ')}
           fill="none"
           stroke="#e74c3c"
           strokeWidth="2"
