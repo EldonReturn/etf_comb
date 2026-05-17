@@ -37,6 +37,7 @@ function App() {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [benchmarkCode, setBenchmarkCode] = useState<string>('510310');
+  const [benchmarkSearch, setBenchmarkSearch] = useState('');
 
   useEffect(() => {
     const fetchETFList = async () => {
@@ -52,6 +53,13 @@ function App() {
     };
     fetchETFList();
   }, [timeRange]);
+
+  useEffect(() => {
+    const validCodes = etfList.filter(e => e.has_enough_data !== false).map(e => e.code);
+    if (validCodes.length > 0 && !validCodes.includes(benchmarkCode)) {
+      setBenchmarkCode(validCodes[0]);
+    }
+  }, [etfList]);
 
   const handleWeightsChange = (weights: Weights) => {
     setCurrentWeights(weights);
@@ -134,6 +142,14 @@ function App() {
               </option>
             ))}
           </select>
+          <input
+            type="text"
+            placeholder="搜索基准ETF..."
+            value={benchmarkSearch}
+            onChange={(e) => setBenchmarkSearch(e.target.value)}
+            className="optimizer-search-input"
+            style={{ width: '120px', height: '30px', fontSize: '12px' }}
+          />
           <select
             value={benchmarkCode}
             onChange={(e) => setBenchmarkCode(e.target.value)}
@@ -141,10 +157,15 @@ function App() {
             title="基准ETF"
           >
             {etfList
-              .filter((etf) => etf.has_enough_data !== false)
+              .filter((etf) => {
+                const matchData = etf.has_enough_data !== false;
+                const search = benchmarkSearch.toLowerCase();
+                const matchSearch = !search || etf.code.toLowerCase().includes(search) || etf.name.toLowerCase().includes(search);
+                return matchData && matchSearch;
+              })
               .map((etf) => (
                 <option key={etf.code} value={etf.code}>
-                  基准: {etf.code} {etf.name}
+                  {etf.code} {etf.name}
                 </option>
               ))}
           </select>
