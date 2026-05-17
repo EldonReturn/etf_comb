@@ -36,7 +36,7 @@ function App() {
   const [timeRange, setTimeRange] = useState<TimeRange>('1y');
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
-  const [benchmarkCode, setBenchmarkCode] = useState<string>('510310');
+  const [benchmarkCode, setBenchmarkCode] = useState<string>('510310.SH');
   const [benchmarkSearch, setBenchmarkSearch] = useState('');
 
   useEffect(() => {
