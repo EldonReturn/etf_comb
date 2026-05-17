@@ -307,8 +307,14 @@ def optimize_max_return(etf_codes: List[str],
             total = sum(weights_dict.values())
             weights_dict = {k: v / total for k, v in weights_dict.items()}
 
-        expected_return = portfolio_return(optimal_weights, np.array(annual_returns))
-        volatility = portfolio_volatility(optimal_weights, cov_matrix) * np.sqrt(252)
+        portfolio_navs = []
+        for i in range(min_len):
+            nav = sum(aligned_navs[j][i] * optimal_weights[j] for j in range(n))
+            portfolio_navs.append(nav)
+        pf_returns = calculate_returns_from_nav(portfolio_navs)
+        total_ret = (portfolio_navs[-1] - portfolio_navs[0]) / portfolio_navs[0]
+        expected_return = calculate_annualized_return(total_ret, len(pf_returns))
+        volatility = calculate_volatility(pf_returns)
         sharpe = calculate_sharpe_ratio(expected_return, volatility)
 
         return OptimizationResult(
@@ -462,8 +468,14 @@ def optimize_with_constraints(etf_codes: List[str],
             total = sum(weights_dict.values())
             weights_dict = {k: v / total for k, v in weights_dict.items()}
 
-        expected_return = portfolio_return(optimal_weights, np.array(annual_returns))
-        volatility = portfolio_volatility(optimal_weights, cov_matrix) * np.sqrt(252)
+        portfolio_navs = []
+        for i in range(min_len):
+            nav = sum(aligned_navs[j][i] * optimal_weights[j] for j in range(n))
+            portfolio_navs.append(nav)
+        pf_returns = calculate_returns_from_nav(portfolio_navs)
+        total_ret = (portfolio_navs[-1] - portfolio_navs[0]) / portfolio_navs[0]
+        expected_return = calculate_annualized_return(total_ret, len(pf_returns))
+        volatility = calculate_volatility(pf_returns)
         sharpe = calculate_sharpe_ratio(expected_return, volatility)
 
         return OptimizationResult(
