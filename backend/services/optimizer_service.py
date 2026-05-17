@@ -328,7 +328,7 @@ def optimize_max_return(etf_codes: List[str],
         weights_dict = {k: v for k, v in weights_dict.items() if v > 1e-6}
 
         expected_return = portfolio_return(optimal_weights, np.array(annual_returns))
-        volatility = portfolio_volatility(optimal_weights, cov_matrix)
+        volatility = portfolio_volatility(optimal_weights, cov_matrix) * np.sqrt(252)
         sharpe = calculate_sharpe_ratio(expected_return, volatility)
 
         return OptimizationResult(
@@ -445,7 +445,7 @@ def optimize_with_constraints(etf_codes: List[str],
         if target_volatility:
             constraints.append({
                 'type': 'ineq',
-                'fun': lambda w: target_volatility - portfolio_volatility(w, cov_matrix)
+                'fun': lambda w: target_volatility - portfolio_volatility(w, cov_matrix) * np.sqrt(252)
             })
 
         result = minimize(
@@ -480,7 +480,7 @@ def optimize_with_constraints(etf_codes: List[str],
         weights_dict = {k: v for k, v in weights_dict.items() if v > 1e-6}
 
         expected_return = portfolio_return(optimal_weights, np.array(annual_returns))
-        volatility = portfolio_volatility(optimal_weights, cov_matrix)
+        volatility = portfolio_volatility(optimal_weights, cov_matrix) * np.sqrt(252)
         sharpe = calculate_sharpe_ratio(expected_return, volatility)
 
         return OptimizationResult(

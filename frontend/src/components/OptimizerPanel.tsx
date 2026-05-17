@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { ETFInfo, OptimizationResult, Weights } from '../api';
 
 const CATEGORIES = ['全部', '宽基指数', '行业指数', '债券', '商品', '境外'];
@@ -7,10 +7,11 @@ interface OptimizerPanelProps {
   availableETFs: ETFInfo[];
   onOptimized: (weights: Weights) => void;
   timeRange?: string;
+  selectedETFs: string[];
+  onSelectionChange: (codes: string[]) => void;
 }
 
-export function OptimizerPanel({ availableETFs, onOptimized, timeRange = '1y' }: OptimizerPanelProps) {
-  const [selectedETFs, setSelectedETFs] = useState<string[]>([]);
+export function OptimizerPanel({ availableETFs, onOptimized, timeRange = '1y', selectedETFs: externalSelected, onSelectionChange }: OptimizerPanelProps) {
   const [maxWeight, setMaxWeight] = useState<number | undefined>(undefined);
   const [targetVolatility, setTargetVolatility] = useState<number | undefined>(undefined);
   const [optimizing, setOptimizing] = useState(false);
@@ -18,6 +19,16 @@ export function OptimizerPanel({ availableETFs, onOptimized, timeRange = '1y' }:
   const [error, setError] = useState<string | null>(null);
   const [category, setCategory] = useState('全部');
   const [searchTerm, setSearchTerm] = useState('');
+
+  const selectedETFs = externalSelected;
+
+  useEffect(() => {
+    const insufficient = availableETFs.filter((e) => e.has_enough_data === false).map((e) => e.code);
+    const filtered = selectedETFs.filter((code) => !insufficient.includes(code));
+    if (filtered.length !== selectedETFs.length) {
+      onSelectionChange(filtered);
+    }
+  }, [availableETFs, selectedETFs, onSelectionChange]);
 
   const filteredETFs = useMemo(() => {
     return availableETFs.filter((etf) => {
@@ -31,32 +42,31 @@ export function OptimizerPanel({ availableETFs, onOptimized, timeRange = '1y' }:
   }, [availableETFs, category, searchTerm]);
 
   const handleETFChange = (code: string) => {
-    setSelectedETFs((prev) => {
-      if (prev.includes(code)) {
-        return prev.filter((c) => c !== code);
-      }
-      return [...prev, code];
-    });
+    const etf = availableETFs.find((e) => e.code === code);
+    if (etf?.has_enough_data === false) return;
+    const newSelected = selectedETFs.includes(code)
+      ? selectedETFs.filter((c) => c !== code)
+      : [...selectedETFs, code];
+    onSelectionChange(newSelected);
   };
 
   const handleSelectAll = () => {
-    if (selectedETFs.length === filteredETFs.length) {
-      setSelectedETFs([]);
-    } else {
-      setSelectedETFs(filteredETFs.map((etf) => etf.code));
-    }
+    const selectable = filteredETFs.filter((etf) => etf.has_enough_data !== false).map((etf) => etf.code);
+    const newSelected = selectedETFs.length === selectable.length
+      ? []
+      : selectable;
+    onSelectionChange(newSelected);
   };
 
   const handleSelectByCategory = (cat: string) => {
+    let newCodes: string[];
     if (cat === '全部') {
-      setSelectedETFs(filteredETFs.map((etf) => etf.code));
+      newCodes = filteredETFs.filter((etf) => etf.has_enough_data !== false).map((etf) => etf.code);
     } else {
-      const codes = filteredETFs.filter((etf) => etf.category === cat).map((etf) => etf.code);
-      setSelectedETFs((prev) => {
-        const newSet = new Set([...prev, ...codes]);
-        return Array.from(newSet);
-      });
+      newCodes = filteredETFs.filter((etf) => etf.category === cat && etf.has_enough_data !== false).map((etf) => etf.code);
     }
+    const newSelected = [...new Set([...selectedETFs, ...newCodes])];
+    onSelectionChange(Array.from(newSelected));
   };
 
   const handleOptimize = async () => {
@@ -155,14 +165,16 @@ export function OptimizerPanel({ availableETFs, onOptimized, timeRange = '1y' }:
 
           <div className="etf-checklist">
             {filteredETFs.map((etf) => (
-              <label key={etf.code} className="etf-checkbox">
+              <label key={etf.code} className={`etf-checkbox ${etf.has_enough_data === false ? 'data-insufficient' : ''}`}>
                 <input
                   type="checkbox"
                   checked={selectedETFs.includes(etf.code)}
+                  disabled={etf.has_enough_data === false}
                   onChange={() => handleETFChange(etf.code)}
                 />
                 <span className="etf-code">{etf.code}</span>
                 <span className="etf-name">{etf.name}</span>
+                {etf.has_enough_data === false && <span className="etf-warning" title="数据不足当前周期">!</span>}
               </label>
             ))}
           </div>

@@ -326,7 +326,7 @@ async def optimize_portfolio_api(request: OptimizeRequest):
         if request.max_weight or request.target_volatility:
             result = optimize_with_constraints(
                 etf_codes=request.etf_codes,
-                max_weight=request.max_weight,
+                max_weight=request.max_weight / 100 if request.max_weight else None,
                 target_volatility=request.target_volatility / 100 if request.target_volatility else None,
                 period=request.period,
             )

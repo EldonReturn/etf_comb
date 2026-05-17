@@ -30,6 +30,7 @@ const TIME_RANGES: { value: TimeRange; label: string }[] = [
 function App() {
   const [etfList, setEtfList] = useState<ETFInfo[]>([]);
   const [currentWeights, setCurrentWeights] = useState<Weights>({});
+  const [optimizerSelected, setOptimizerSelected] = useState<string[]>([]);
   const [savedPortfolios, setSavedPortfolios] = useState<Weights[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('single');
   const [timeRange, setTimeRange] = useState<TimeRange>('1y');
@@ -39,7 +40,7 @@ function App() {
   useEffect(() => {
     const fetchETFList = async () => {
       try {
-        const response = await fetch('/api/etfs');
+        const response = await fetch(`/api/etfs?period=${timeRange}`);
         if (response.ok) {
           const data = await response.json();
           setEtfList(data.etfs || []);
@@ -49,14 +50,20 @@ function App() {
       }
     };
     fetchETFList();
-  }, []);
+  }, [timeRange]);
 
   const handleWeightsChange = (weights: Weights) => {
     setCurrentWeights(weights);
+    setOptimizerSelected(Object.keys(weights));
   };
 
   const handleOptimized = (weights: Weights) => {
     setCurrentWeights(weights);
+    setOptimizerSelected(Object.keys(weights));
+  };
+
+  const handleOptimizerSelectionChange = (codes: string[]) => {
+    setOptimizerSelected(codes);
   };
 
   const handleSavePortfolio = () => {
@@ -173,6 +180,8 @@ function App() {
             availableETFs={etfList}
             onOptimized={handleOptimized}
             timeRange={timeRange}
+            selectedETFs={optimizerSelected}
+            onSelectionChange={handleOptimizerSelectionChange}
           />
         </aside>
       </main>
