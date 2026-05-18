@@ -27,16 +27,34 @@ const TIME_RANGES: { value: TimeRange; label: string }[] = [
   { value: '5y', label: '5年' },
 ];
 
+const STORAGE_KEYS = {
+  currentWeights: 'etf_comb_current_weights',
+  optimizerSelected: 'etf_comb_optimizer_selected',
+  savedPortfolios: 'etf_comb_saved_portfolios',
+  timeRange: 'etf_comb_time_range',
+  benchmarkCode: 'etf_comb_benchmark_code',
+  viewMode: 'etf_comb_view_mode',
+} as const;
+
+const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
+  try {
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : defaultValue;
+  } catch {
+    return defaultValue;
+  }
+};
+
 function App() {
   const [etfList, setEtfList] = useState<ETFInfo[]>([]);
   const [currentWeights, setCurrentWeights] = useState<Weights>({});
   const [optimizerSelected, setOptimizerSelected] = useState<string[]>([]);
   const [savedPortfolios, setSavedPortfolios] = useState<Weights[]>([]);
-  const [viewMode, setViewMode] = useState<ViewMode>('single');
-  const [timeRange, setTimeRange] = useState<TimeRange>('1y');
+  const [viewMode, setViewMode] = useState<ViewMode>(loadFromStorage(STORAGE_KEYS.viewMode, 'single'));
+  const [timeRange, setTimeRange] = useState<TimeRange>(loadFromStorage(STORAGE_KEYS.timeRange, '1y'));
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
-  const [benchmarkCode, setBenchmarkCode] = useState<string>('510310.SH');
+  const [benchmarkCode, setBenchmarkCode] = useState<string>(loadFromStorage(STORAGE_KEYS.benchmarkCode, '510310.SH'));
   const [benchmarkSearch, setBenchmarkSearch] = useState('');
 
   useEffect(() => {
@@ -60,6 +78,84 @@ function App() {
       setBenchmarkCode(validCodes[0]);
     }
   }, [etfList]);
+
+  useEffect(() => {
+    const stored = loadFromStorage<Weights | null>(STORAGE_KEYS.currentWeights, null);
+    if (stored) {
+      setCurrentWeights(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    const stored = loadFromStorage<string[] | null>(STORAGE_KEYS.optimizerSelected, null);
+    if (stored) {
+      setOptimizerSelected(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    const stored = loadFromStorage<Weights[] | null>(STORAGE_KEYS.savedPortfolios, null);
+    if (stored) {
+      setSavedPortfolios(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    const stored = loadFromStorage<TimeRange | null>(STORAGE_KEYS.timeRange, null);
+    if (stored) {
+      setTimeRange(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    const stored = loadFromStorage<string | null>(STORAGE_KEYS.benchmarkCode, null);
+    if (stored) {
+      setBenchmarkCode(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    const stored = loadFromStorage<ViewMode | null>(STORAGE_KEYS.viewMode, null);
+    if (stored) {
+      setViewMode(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEYS.currentWeights);
+    const current = JSON.stringify(currentWeights);
+    if (current !== stored && Object.keys(currentWeights).length > 0) {
+      localStorage.setItem(STORAGE_KEYS.currentWeights, current);
+    }
+  }, [currentWeights]);
+
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEYS.optimizerSelected);
+    const current = JSON.stringify(optimizerSelected);
+    if (current !== stored && optimizerSelected.length > 0) {
+      localStorage.setItem(STORAGE_KEYS.optimizerSelected, current);
+    }
+  }, [optimizerSelected]);
+
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEYS.savedPortfolios);
+    const current = JSON.stringify(savedPortfolios);
+    if (current !== stored && savedPortfolios.length > 0) {
+      localStorage.setItem(STORAGE_KEYS.savedPortfolios, current);
+    }
+  }, [savedPortfolios]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.timeRange, timeRange);
+  }, [timeRange]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.benchmarkCode, benchmarkCode);
+  }, [benchmarkCode]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.viewMode, viewMode);
+  }, [viewMode]);
 
   const handleWeightsChange = (weights: Weights) => {
     setCurrentWeights(weights);
