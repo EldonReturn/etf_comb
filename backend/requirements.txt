@@ -28,3 +28,4 @@ httpx
 # Utilities
 python-dotenv
 pydantic
+python-dateutil

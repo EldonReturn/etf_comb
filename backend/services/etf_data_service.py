@@ -603,9 +603,12 @@ def sync_all_etf_data(progress_callback=None, period: Optional[str] = None) -> D
     stats = {"etf_count": 0, "nav_count": 0, "errors": 0}
 
     start_date = None
+    fetch_count = 500
     if period:
         days = period_to_days(period)
         start_date = date.today() - timedelta(days=days)
+        if days >= 730:
+            fetch_count = days
 
     with get_session() as session:
         clear_etf_data(session)
@@ -620,8 +623,8 @@ def sync_all_etf_data(progress_callback=None, period: Optional[str] = None) -> D
     batch_results = {}
     for i in range(0, total, batch_size):
         batch_codes = etf_codes[i:i + batch_size]
-        logger.info(f"正在获取第{i // batch_size + 1}批, 共{(total + batch_size - 1) // batch_size}批, 代码数: {len(batch_codes)}")
-        batch_data = fetch_etf_history_batch(batch_codes, count=500)
+        logger.info(f"正在获取第{i // batch_size + 1}批, 共{(total + batch_size - 1) // batch_size}批, 代码数: {len(batch_codes)}, 请求数量: {fetch_count}")
+        batch_data = fetch_etf_history_batch(batch_codes, count=fetch_count)
         batch_results.update(batch_data)
 
     with get_session() as session:

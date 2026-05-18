@@ -22,6 +22,7 @@
 
 import logging
 from datetime import datetime, date, timedelta
+from dateutil.relativedelta import relativedelta
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 
@@ -39,9 +40,23 @@ TRADING_DAYS_PER_YEAR = 252
 BENCHMARK_ETF_CODE = "510310.SH"
 
 
+def _parse_period(period: str) -> Tuple[int, str]:
+    """解析period字符串，返回(数字, 单位)的元组"""
+    if not period:
+        return 1, 'y'
+    unit = period[-1]
+    try:
+        num = int(period[:-1])
+    except ValueError:
+        num = 1
+    return num, unit
+
+
 def period_to_days(period: Optional[str]) -> int:
     """
-    将时间区段字符串转换为天数
+    将时间区段字符串转换为精确的天数
+
+    使用 dateutil.relativedelta 计算精确的日历天数，考虑闰年、闰月等。
 
     参数:
         period: 时间区段字符串，如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'
@@ -52,22 +67,25 @@ def period_to_days(period: Optional[str]) -> int:
     if not period:
         return 365
 
-    period_map = {
-        '1m': 30,
-        '3m': 90,
-        '6m': 180,
-        '1y': 365,
-        '2y': 730,
-        '3y': 1095,
-        '5y': 1825,
-    }
+    num, unit = _parse_period(period)
+    today = date.today()
 
-    return period_map.get(period, 365)
+    if unit == 'm':
+        target_date = today + relativedelta(months=num)
+    elif unit == 'y':
+        target_date = today + relativedelta(years=num)
+    else:
+        return 365
+
+    delta = target_date - today
+    return delta.days
 
 
 def period_to_trading_days(period: Optional[str]) -> int:
     """
     将时间区段字符串转换为交易日天数
+
+    基于 period_to_days 计算的精确日历天数，再按 252/365 的比例换算为交易日天数。
 
     参数:
         period: 时间区段字符串，如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'
@@ -78,17 +96,9 @@ def period_to_trading_days(period: Optional[str]) -> int:
     if not period:
         return 252
 
-    trading_day_map = {
-        '1m': 21,
-        '3m': 63,
-        '6m': 126,
-        '1y': 252,
-        '2y': 504,
-        '3y': 756,
-        '5y': 1260,
-    }
-
-    return trading_day_map.get(period, 252)
+    calendar_days = period_to_days(period)
+    trading_days = round(calendar_days * 252 / 365)
+    return max(trading_days, 1)
 
 
 @dataclass
