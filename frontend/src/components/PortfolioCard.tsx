@@ -40,7 +40,6 @@ function MetricCard({ label, value, suffix = '', color }: MetricCardProps) {
     <div className="metric-card">
       <span className="metric-label">{label}</span>
       <span className="metric-value" style={{ color: valueColor }}>
-        {isNegative && value !== 0 ? '-' : ''}
         {displayValue}
         {suffix}
       </span>

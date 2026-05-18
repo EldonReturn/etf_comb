@@ -434,18 +434,13 @@ def save_etf_nav_to_db(session: Session, code: str, nav_df: pd.DataFrame) -> int
     return len(mappings)
 
 
-def get_etf_data_days(session: Session, code: str, days: int) -> int:
+def get_etf_data_days(session: Session, code: str, end_date: date, trade_dates: List[date]) -> int:
     """获取ETF在指定周期内的实际交易日数据天数"""
-    end_date = date.today()
-    start_date = end_date - timedelta(days=days)
-
-    trade_dates = get_trade_dates(session, start_date, end_date)
     if not trade_dates:
         return 0
 
     count = session.query(ETFNavHistory).filter(
         ETFNavHistory.etf_code == code,
-        ETFNavHistory.nav_date >= start_date,
         ETFNavHistory.nav_date <= end_date,
         ETFNavHistory.nav_date.in_(trade_dates)
     ).count()
@@ -525,10 +520,6 @@ def get_etf_info_from_db(session: Session, period: Optional[str] = None) -> List
 
     if period:
         lookback_days = period_to_days(period)
-        end_date = date.today()
-        start_date = end_date - timedelta(days=lookback_days)
-        trade_dates_in_period = get_trade_dates(session, start_date, end_date)
-        required_trading_days = len(trade_dates_in_period)
 
     for etf in results:
         item = {
@@ -539,7 +530,11 @@ def get_etf_info_from_db(session: Session, period: Optional[str] = None) -> List
         }
 
         if period:
-            actual_days = get_etf_data_days(session, etf.code, lookback_days)
+            etf_end_date = etf.updated_at.date() if etf.updated_at else date.today()
+            etf_start_date = etf_end_date - timedelta(days=lookback_days)
+            trade_dates_in_period = get_trade_dates(session, etf_start_date, etf_end_date)
+            required_trading_days = len(trade_dates_in_period)
+            actual_days = get_etf_data_days(session, etf.code, etf_end_date, trade_dates_in_period)
             item["data_days"] = actual_days
             item["has_enough_data"] = actual_days >= required_trading_days
 

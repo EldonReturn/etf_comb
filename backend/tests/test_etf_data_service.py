@@ -429,6 +429,46 @@ class TestGetETFInfoFromDB:
         updated_at = mock_result[0]["updated_at"]
         assert "T" in updated_at or " " in updated_at
 
+    def test_has_enough_data_uses_updated_at_not_today(self):
+        """
+        测试足周期判断使用updated_at而非date.today()
+
+        场景：5月17日同步了1年数据，5月18日调用时
+        - 错误逻辑：用5月18日判断，所有数据不足1年
+        - 正确逻辑：用5月17日判断，数据充足
+        """
+        from datetime import datetime, timedelta
+        from backend.services.etf_data_service import get_etf_info_from_db, get_etf_data_days, get_trade_dates
+        from backend.db.models import ETFInfo
+        from backend.db.database import get_session
+
+        sync_date = date(2024, 5, 17)
+        period = "1y"
+
+        with get_session() as session:
+            etfs = get_etf_info_from_db(session, period=period)
+
+        etf_with_sync_date = next(
+            (e for e in etfs if e.get("updated_at") and "2024-05-17" in e.get("updated_at", "")),
+            None
+        )
+
+        if etf_with_sync_date:
+            etf_code = etf_with_sync_date["code"]
+            actual_days = etf_with_sync_date.get("data_days", 0)
+            lookback_days = {"1y": 365, "6m": 180, "3m": 90, "1m": 30}.get(period, 30)
+
+            with get_session() as session:
+                etf_end_date = sync_date
+                etf_start_date = etf_end_date - timedelta(days=lookback_days)
+                trade_dates_in_period = get_trade_dates(session, etf_start_date, etf_end_date)
+                required_trading_days = len(trade_dates_in_period)
+
+            assert actual_days >= required_trading_days, (
+                f"ETF {etf_code} 在 {sync_date} 同步，"
+                f"应有 {required_trading_days} 交易日，实际 {actual_days} 天"
+            )
+
 
 class TestGetETFHistoryFromDB:
     """
