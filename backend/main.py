@@ -44,10 +44,6 @@ from backend.services import (
     compare_portfolios,
     optimize_max_return,
     optimize_with_constraints,
-    start_scheduler,
-    stop_scheduler,
-    run_sync_now,
-    get_scheduler_status,
     fetch_trade_dates,
 )
 
@@ -60,7 +56,7 @@ async def lifespan(app: FastAPI):
     """
     应用生命周期管理器
 
-    在应用启动时初始化数据库和调度器，
+    在应用启动时初始化数据库，
     在应用关闭时清理资源。
     """
     logger.info("应用启动中...")
@@ -73,7 +69,6 @@ async def lifespan(app: FastAPI):
 
     logger.info("应用关闭中...")
     close_all_sessions()
-    stop_scheduler()
     logger.info("资源清理完成")
 
 
@@ -411,42 +406,6 @@ async def sync_etf_data(request: SyncRequest = None):
         )
     except Exception as e:
         logger.error(f"数据同步失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/admin/scheduler/status", tags=["数据管理"])
-async def get_scheduler_status_api():
-    """
-    获取定时任务状态
-
-    返回调度器的运行状态和下次执行时间。
-    """
-    return get_scheduler_status()
-
-
-@app.post("/api/admin/scheduler/start", tags=["数据管理"])
-async def start_scheduler_api():
-    """
-    启动定时调度器
-
-    启动后，每天16:00自动执行ETF数据同步。
-    """
-    try:
-        start_scheduler()
-        return {"status": "started", "message": "定时调度器已启动"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/admin/scheduler/stop", tags=["数据管理"])
-async def stop_scheduler_api():
-    """
-    停止定时调度器
-    """
-    try:
-        stop_scheduler()
-        return {"status": "stopped", "message": "定时调度器已停止"}
-    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 

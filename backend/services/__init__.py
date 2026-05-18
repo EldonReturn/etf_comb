@@ -41,15 +41,6 @@ from backend.services.optimizer_service import (
     OptimizationResult,
 )
 
-from backend.services.scheduler_service import (
-    start_scheduler,
-    stop_scheduler,
-    run_sync_now,
-    get_next_run_time,
-    get_scheduler_status,
-    sync_etf_data_job,
-)
-
 __all__ = [
     # 数据服务
     "fetch_etf_list_from_em",
@@ -82,11 +73,4 @@ __all__ = [
     "portfolio_volatility",
     "calculate_covariance_matrix",
     "OptimizationResult",
-    # 调度服务
-    "start_scheduler",
-    "stop_scheduler",
-    "run_sync_now",
-    "get_next_run_time",
-    "get_scheduler_status",
-    "sync_etf_data_job",
-]
+    ]
