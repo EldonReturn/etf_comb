@@ -20,6 +20,7 @@ interface PortfolioCardProps {
   name?: string;
   timeRange?: string;
   benchmarkCode?: string;
+  onDelete?: () => void;
 }
 
 type MetricCardProps = {
@@ -47,7 +48,7 @@ function MetricCard({ label, value, suffix = '', color }: MetricCardProps) {
   );
 }
 
-export function PortfolioCard({ weights, id, name, timeRange = '1y', benchmarkCode = '510310' }: PortfolioCardProps) {
+export function PortfolioCard({ weights, id, name, timeRange = '1y', benchmarkCode = '510310', onDelete }: PortfolioCardProps) {
   const [metrics, setMetrics] = useState<PortfolioMetrics | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -298,6 +299,7 @@ export function PortfolioCard({ weights, id, name, timeRange = '1y', benchmarkCo
       <div className="card-header">
         <h3>{name || `组合${id || ''}`}</h3>
         {loading && <span className="loading-badge">评估中...</span>}
+        {onDelete && <button className="btn-delete" onClick={onDelete}>删除</button>}
       </div>
 
       <div className="card-body">

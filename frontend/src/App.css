@@ -1028,6 +1028,21 @@ body {
   text-decoration: underline;
 }
 
+.btn-delete {
+  background: none;
+  border: 1px solid #e74c3c;
+  color: #e74c3c;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.btn-delete:hover {
+  background: #e74c3c;
+  color: white;
+}
+
 /* Messages */
 .loading,
 .error,

@@ -181,6 +181,16 @@ function App() {
     setSavedPortfolios((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handleClearStorage = () => {
+    Object.values(STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
+    setCurrentWeights({});
+    setOptimizerSelected([]);
+    setSavedPortfolios([]);
+    setViewMode('single');
+    setTimeRange('1y');
+    setBenchmarkCode('510310.SH');
+  };
+
   const handleSync = async () => {
     setSyncing(true);
     setSyncMsg(null);
@@ -284,6 +294,9 @@ function App() {
             保存当前组合
           </button>
         )}
+        <button className="btn-secondary" onClick={handleClearStorage}>
+          清除缓存
+        </button>
       </div>
 
       <main className="app-main">
@@ -335,6 +348,7 @@ function App() {
                 name={`已保存组合${index + 1}`}
                 timeRange={timeRange}
                 benchmarkCode={benchmarkCode}
+                onDelete={() => handleRemovePortfolio(index)}
               />
             ))}
           </div>
