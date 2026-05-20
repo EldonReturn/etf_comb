@@ -11,6 +11,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { ETFInfo, Weights } from './api';
 import { ETFSelector, PortfolioCard, CompareTable, OptimizerPanel } from './components';
+import Login from './pages/admin/Login';
+import Dashboard from './pages/admin/Dashboard';
 import './App.css';
 
 type ViewMode = 'single' | 'compare';
@@ -52,10 +54,32 @@ function App() {
   const [savedPortfolios, setSavedPortfolios] = useState<Weights[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>(loadFromStorage(STORAGE_KEYS.viewMode, 'single'));
   const [timeRange, setTimeRange] = useState<TimeRange>(loadFromStorage(STORAGE_KEYS.timeRange, '1y'));
-  const [syncing, setSyncing] = useState(false);
-  const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [benchmarkCode, setBenchmarkCode] = useState<string>(loadFromStorage(STORAGE_KEYS.benchmarkCode, '510310.SH'));
   const [benchmarkSearch, setBenchmarkSearch] = useState('');
+  const [adminLoggedIn, setAdminLoggedIn] = useState(false);
+  const [isAdminRoute, setIsAdminRoute] = useState(window.location.hash === '#admin');
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      setIsAdminRoute(window.location.hash === '#admin');
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  useEffect(() => {
+    const checkAdminSession = async () => {
+      try {
+        const response = await fetch('/api/admin/sync/status');
+        if (response.ok) {
+          setAdminLoggedIn(true);
+        }
+      } catch {
+        setAdminLoggedIn(false);
+      }
+    };
+    checkAdminSession();
+  }, []);
 
   useEffect(() => {
     const fetchETFList = async () => {
@@ -191,28 +215,16 @@ function App() {
     setBenchmarkCode('510310.SH');
   };
 
-  const handleSync = async () => {
-    setSyncing(true);
-    setSyncMsg(null);
-    try {
-      const response = await fetch('/api/admin/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ period: timeRange }),
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setSyncMsg(`同步成功: ${data.etf_count}只ETF, ${data.nav_count}条净值`);
-        setTimeout(() => setSyncMsg(null), 3000);
-      } else {
-        setSyncMsg(`同步失败: ${data.detail || '未知错误'}`);
-      }
-    } catch {
-      setSyncMsg('同步失败: 网络错误');
-    } finally {
-      setSyncing(false);
-    }
+  const handleLogout = () => {
+    setAdminLoggedIn(false);
   };
+
+  if (isAdminRoute) {
+    if (!adminLoggedIn) {
+      return <Login onLoginSuccess={() => setAdminLoggedIn(true)} />;
+    }
+    return <Dashboard onLogout={handleLogout} />;
+  }
 
   return (
     <div className="app">
@@ -278,14 +290,6 @@ function App() {
                 </option>
               ))}
             </select>
-            <button
-              className="btn-secondary"
-              onClick={handleSync}
-              disabled={syncing}
-            >
-              {syncing ? '同步中...' : '同步数据'}
-            </button>
-            {syncMsg && <span className="sync-message">{syncMsg}</span>}
           </div>
         </div>
 
@@ -296,6 +300,9 @@ function App() {
         )}
         <button className="btn-secondary" onClick={handleClearStorage}>
           清除缓存
+        </button>
+        <button className="btn-secondary" onClick={() => window.location.hash = '#admin'}>
+          管理后台
         </button>
       </div>
 

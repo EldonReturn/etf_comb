@@ -46,6 +46,7 @@ from backend.services import (
     optimize_with_constraints,
     fetch_trade_dates,
 )
+from backend.routes.admin import router as admin_router
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -96,6 +97,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(admin_router)
 
 
 class PortfolioEvaluateRequest(BaseModel):
@@ -376,36 +379,6 @@ async def sync_trade_dates_api():
         return {"status": "completed", "new_trade_dates": count}
     except Exception as e:
         logger.error(f"交易日历同步失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/admin/sync", response_model=SyncResponse, tags=["数据管理"])
-async def sync_etf_data(request: SyncRequest = None):
-    """
-    手动触发ETF数据同步
-
-    从AkShare获取最新ETF数据并存储到本地数据库。
-    支持按时间区段同步（默认同步全部）。
-
-    参数:
-        request: SyncRequest，包含同步时间区段（可选）
-
-    返回:
-        SyncResponse: 同步统计信息
-    """
-    try:
-        logger.info("开始手动触发ETF数据同步")
-        period = request.period if request else None
-        stats = sync_all_etf_data(period=period)
-        logger.info("手动触发ETF数据同步完成")
-        return SyncResponse(
-            status="completed",
-            etf_count=stats["etf_count"],
-            nav_count=stats["nav_count"],
-            errors=stats["errors"]
-        )
-    except Exception as e:
-        logger.error(f"数据同步失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

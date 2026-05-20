@@ -35,7 +35,7 @@ from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
 
 from backend.db.models import ETFInfo, ETFNavHistory, TradeDate
-from backend.db.database import get_session
+from backend.db.database import get_session, init_session_factories, SessionLocal
 from backend.services.portfolio_service import period_to_days
 
 try:
@@ -380,7 +380,7 @@ def save_etf_info_to_db(session: Session, etf_list: pd.DataFrame) -> int:
 
 def save_etf_nav_to_db(session: Session, code: str, nav_df: pd.DataFrame) -> int:
     """
-    保存ETF历史行情到数据库
+    保存单个ETF历史行情到数据库
 
     将ETF的历史行情数据批量插入数据库。
     使用INSERT OR REPLACE策略，确保同一ETF同一日期的数据唯一。
@@ -388,29 +388,19 @@ def save_etf_nav_to_db(session: Session, code: str, nav_df: pd.DataFrame) -> int
     参数:
         session: 数据库会话
         code: ETF代码
-        nav_df: TickFlow返回的DataFrame，字段映射如下：
+        nav_df: DataFrame，字段映射如下：
             - 日期 -> nav_date (交易日期)
-            - 收盘 -> nav (收盘价/单位净值，用于计算收益率)
-            - 收盘 -> accum_nav (前复权收盘价=累计净值，反映真实长期收益)
-            - 涨跌幅 -> change_pct (日涨跌幅，百分比)
-            - 成交量 -> volume (成交量)
-            - 成交额 -> amount (成交额)
+            - 收盘 -> nav (收盘价/单位净值)
+            - 收盘 -> accum_nav (前复权收盘价)
 
     返回:
         int: 成功保存的行情记录数
-
-    注意:
-        - TickFlow 使用 adjust=forward 前复权模式
-        - 前复权收盘价即为反映分红再投资的累计净值
-        - nav 和 accum_nav 在当前数据源下均为前复权收盘价
-        - DataFrame中的日期列需要能够转换为date对象
     """
     mappings = []
 
     for row in nav_df.itertuples(index=False):
         try:
             nav_date_str = str(row.日期) if hasattr(row, '日期') else ""
-
             close_price = float(getattr(row, '收盘', 0) if hasattr(row, '收盘') else 0)
 
             if not nav_date_str or close_price <= 0:
@@ -429,7 +419,53 @@ def save_etf_nav_to_db(session: Session, code: str, nav_df: pd.DataFrame) -> int
 
     if mappings:
         session.bulk_insert_mappings(ETFNavHistory, mappings)
-        session.commit()
+
+    return len(mappings)
+
+
+def save_etf_nav_batch(session: Session, nav_data: Dict[str, pd.DataFrame]) -> int:
+    """
+    批量保存多个ETF历史行情到数据库
+
+    将多个ETF的净值数据累积后一次性写入，大幅减少事务提交次数。
+
+    参数:
+        session: 数据库会话
+        nav_data: 字典，键为ETF代码，值为对应的行情DataFrame
+
+    返回:
+        int: 成功保存的行情记录总数
+    """
+    if not nav_data:
+        return 0
+
+    mappings = []
+
+    for code, nav_df in nav_data.items():
+        if nav_df is None or nav_df.empty:
+            continue
+
+        for row in nav_df.itertuples(index=False):
+            try:
+                nav_date_str = str(row.日期) if hasattr(row, '日期') else ""
+                close_price = float(getattr(row, '收盘', 0) if hasattr(row, '收盘') else 0)
+
+                if not nav_date_str or close_price <= 0:
+                    continue
+
+                nav_date = pd.to_datetime(nav_date_str).date()
+                mappings.append({
+                    "etf_code": code,
+                    "nav_date": nav_date,
+                    "nav": close_price,
+                    "accum_nav": close_price
+                })
+            except Exception as e:
+                logger.warning(f"处理行情记录失败 (ETF: {code}): {e}")
+                continue
+
+    if mappings:
+        session.bulk_insert_mappings(ETFNavHistory, mappings)
 
     return len(mappings)
 
@@ -610,12 +646,12 @@ def sync_all_etf_data(progress_callback=None, period: Optional[str] = None) -> D
         if days >= 730:
             fetch_count = days
 
-    with get_session() as session:
-        clear_etf_data(session)
-        etf_list = fetch_etf_list_from_em()
-        save_etf_info_to_db(session, etf_list)
-        stats["etf_count"] = len(etf_list)
+    NAV_BUFFER_LIMIT = 5000
 
+    nav_buffer = {}
+    total_nav_count = 0
+
+    etf_list = fetch_etf_list_from_em()
     etf_codes = [_add_exchange_suffix(c) for c in etf_list["代码"].astype(str).tolist()]
     total = len(etf_codes)
 
@@ -627,29 +663,56 @@ def sync_all_etf_data(progress_callback=None, period: Optional[str] = None) -> D
         batch_data = fetch_etf_history_batch(batch_codes, count=fetch_count)
         batch_results.update(batch_data)
 
-    with get_session() as session:
+    if SessionLocal is None:
+        init_session_factories()
+
+    session = SessionLocal()
+    try:
+        clear_etf_data(session)
+        save_etf_info_to_db(session, etf_list)
+        stats["etf_count"] = len(etf_list)
+
         for i, code in enumerate(etf_codes):
             if progress_callback and callable(progress_callback):
-                progress_callback(i + 1, total, f"保存ETF {code}")
+                progress_callback(i + 1, total, f"处理ETF {code}")
 
-            if code in batch_results:
-                df = batch_results[code]
-                if df is not None and not df.empty:
-                    if start_date:
-                        df = df[pd.to_datetime(df['日期']) >= pd.Timestamp(start_date)]
-                        if df.empty:
-                            stats["errors"] += 1
-                            continue
-                    try:
-                        nav_count = save_etf_nav_to_db(session, code, df)
-                        stats["nav_count"] += nav_count
-                    except Exception as e:
-                        logger.error(f"保存ETF {code} 数据失败: {e}")
-                        stats["errors"] += 1
-                else:
-                    stats["errors"] += 1
-            else:
+            if code not in batch_results:
                 stats["errors"] += 1
+                continue
+
+            df = batch_results[code]
+            if df is None or df.empty:
+                stats["errors"] += 1
+                continue
+
+            if start_date:
+                df = df[pd.to_datetime(df['日期']) >= pd.Timestamp(start_date)]
+                if df.empty:
+                    stats["errors"] += 1
+                    continue
+
+            filtered_dfs = {code: df}
+
+            for c, d in filtered_dfs.items():
+                rows_count = len(d)
+                if c not in nav_buffer:
+                    nav_buffer[c] = []
+                nav_buffer[c].append(d)
+
+                if len(nav_buffer[c]) >= 50 or sum(len(df) for df in nav_buffer[c]) >= NAV_BUFFER_LIMIT:
+                    combined_df = pd.concat(nav_buffer[c], ignore_index=True)
+                    nav_count = save_etf_nav_batch(session, {c: combined_df})
+                    total_nav_count += nav_count
+                    nav_buffer[c] = []
+
+        for code in nav_buffer:
+            if nav_buffer[code]:
+                combined_df = pd.concat(nav_buffer[code], ignore_index=True)
+                nav_count = save_etf_nav_batch(session, {code: combined_df})
+                total_nav_count += nav_count
+
+        session.commit()
+        stats["nav_count"] = total_nav_count
 
         session.query(ETFInfo).filter(
             ~ETFInfo.code.in_(
@@ -657,6 +720,13 @@ def sync_all_etf_data(progress_callback=None, period: Optional[str] = None) -> D
             )
         ).delete(synchronize_session=False)
         session.commit()
+
+    except Exception as e:
+        logger.error(f"同步ETF数据失败: {e}")
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
     return stats
 
