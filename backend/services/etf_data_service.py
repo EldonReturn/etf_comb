@@ -35,8 +35,13 @@ from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
 
 from backend.db.models import ETFInfo, ETFNavHistory, TradeDate
-from backend.db.database import get_session, init_session_factories, SessionLocal
+from backend.db.database import get_session, init_session_factories
+from backend.db import database
 from backend.services.portfolio_service import period_to_days
+
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 try:
     from tickflow import TickFlow
@@ -44,9 +49,6 @@ try:
 except ImportError:
     _TICKFLOW_AVAILABLE = False
     logger.warning("TickFlow SDK 未安装，将使用 HTTP 请求模式")
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
 
 
 ETF_CATEGORY_MAP = {
@@ -663,10 +665,10 @@ def sync_all_etf_data(progress_callback=None, period: Optional[str] = None) -> D
         batch_data = fetch_etf_history_batch(batch_codes, count=fetch_count)
         batch_results.update(batch_data)
 
-    if SessionLocal is None:
+    if database.SessionLocal is None:
         init_session_factories()
 
-    session = SessionLocal()
+    session = database.SessionLocal()
     try:
         clear_etf_data(session)
         save_etf_info_to_db(session, etf_list)
