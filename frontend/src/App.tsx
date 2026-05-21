@@ -13,6 +13,7 @@ import type { ETFInfo, Weights } from './api';
 import { ETFSelector, PortfolioCard, CompareTable, OptimizerPanel } from './components';
 import Login from './pages/admin/Login';
 import Dashboard from './pages/admin/Dashboard';
+import FrontendLogin from './pages/Auth/Login';
 import './App.css';
 
 type ViewMode = 'single' | 'compare';
@@ -58,6 +59,8 @@ function App() {
   const [benchmarkSearch, setBenchmarkSearch] = useState('');
   const [adminLoggedIn, setAdminLoggedIn] = useState(false);
   const [isAdminRoute, setIsAdminRoute] = useState(window.location.hash === '#admin');
+  const [frontendLoggedIn, setFrontendLoggedIn] = useState(false);
+  const [frontendAuthChecked, setFrontendAuthChecked] = useState(false);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -66,6 +69,30 @@ function App() {
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('frontend_logged_in');
+    if (stored === 'true') {
+      checkFrontendSession();
+    } else {
+      setFrontendAuthChecked(true);
+    }
+  }, []);
+
+  const checkFrontendSession = async () => {
+    try {
+      const response = await fetch('/api/auth/status');
+      if (response.ok) {
+        setFrontendLoggedIn(true);
+      } else {
+        localStorage.removeItem('frontend_logged_in');
+      }
+    } catch {
+      localStorage.removeItem('frontend_logged_in');
+    } finally {
+      setFrontendAuthChecked(true);
+    }
+  };
 
   useEffect(() => {
     const checkAdminSession = async () => {
@@ -219,6 +246,23 @@ function App() {
     setAdminLoggedIn(false);
   };
 
+  const handleFrontendLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+    }
+    localStorage.removeItem('frontend_logged_in');
+    setFrontendLoggedIn(false);
+  };
+
+  if (!frontendAuthChecked) {
+    return null;
+  }
+
+  if (!frontendLoggedIn) {
+    return <FrontendLogin onLoginSuccess={() => setFrontendLoggedIn(true)} />;
+  }
+
   if (isAdminRoute) {
     if (!adminLoggedIn) {
       return <Login onLoginSuccess={() => setAdminLoggedIn(true)} />;
@@ -303,6 +347,9 @@ function App() {
         </button>
         <button className="btn-secondary" onClick={() => window.location.hash = '#admin'}>
           管理后台
+        </button>
+        <button className="btn-secondary" onClick={handleFrontendLogout}>
+          退出登录
         </button>
       </div>
 

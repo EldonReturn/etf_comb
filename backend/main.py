@@ -23,7 +23,11 @@ API文档：
 import logging
 from datetime import date, datetime
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import List, Dict, Optional
+
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=Path(__file__).resolve().parent / '.env')
 
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -47,6 +51,7 @@ from backend.services import (
     fetch_trade_dates,
 )
 from backend.routes.admin import router as admin_router
+from backend.routes.auth import router as auth_router, require_auth
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -99,6 +104,7 @@ app.add_middleware(
 )
 
 app.include_router(admin_router)
+app.include_router(auth_router)
 
 
 class PortfolioEvaluateRequest(BaseModel):
@@ -209,6 +215,7 @@ async def get_etfs(
     category: Optional[str] = Query(None, description="按分类筛选ETF"),
     search: Optional[str] = Query(None, description="搜索ETF名称或代码"),
     period: Optional[str] = Query(None, description="时间区段，用于检查数据是否充足"),
+    session_id: str = Depends(require_auth),
 ):
     """
     获取ETF列表
@@ -246,6 +253,7 @@ async def get_etf_history(
     code: str,
     start_date: Optional[date] = Query(None, description="起始日期"),
     end_date: Optional[date] = Query(None, description="结束日期"),
+    session_id: str = Depends(require_auth),
 ):
     """
     获取ETF历史净值
@@ -276,7 +284,7 @@ async def get_etf_history(
 
 
 @app.post("/api/portfolio/evaluate", tags=["组合评估"])
-async def evaluate_portfolio_api(request: PortfolioEvaluateRequest):
+async def evaluate_portfolio_api(portfolio_request: PortfolioEvaluateRequest, session_id: str = Depends(require_auth)):
     """
     评估组合表现
 
@@ -289,7 +297,7 @@ async def evaluate_portfolio_api(request: PortfolioEvaluateRequest):
         组合业绩指标
     """
     try:
-        result = evaluate_portfolio(request.weights, period=request.period, benchmark_code=request.benchmark_code)
+        result = evaluate_portfolio(portfolio_request.weights, period=portfolio_request.period, benchmark_code=portfolio_request.benchmark_code)
         return result
     except Exception as e:
         logger.error(f"组合评估失败: {e}")
@@ -297,7 +305,7 @@ async def evaluate_portfolio_api(request: PortfolioEvaluateRequest):
 
 
 @app.post("/api/portfolio/compare", tags=["组合对比"])
-async def compare_portfolios_api(request: PortfolioCompareRequest):
+async def compare_portfolios_api(compare_request: PortfolioCompareRequest, session_id: str = Depends(require_auth)):
     """
     比较多个组合
 
@@ -310,7 +318,7 @@ async def compare_portfolios_api(request: PortfolioCompareRequest):
         多个组合的业绩指标列表
     """
     try:
-        results = compare_portfolios(request.portfolios, period=request.period, benchmark_code=request.benchmark_code)
+        results = compare_portfolios(compare_request.portfolios, period=compare_request.period, benchmark_code=compare_request.benchmark_code)
         return {"portfolios": results}
     except Exception as e:
         logger.error(f"组合对比失败: {e}")
@@ -318,31 +326,31 @@ async def compare_portfolios_api(request: PortfolioCompareRequest):
 
 
 @app.post("/api/portfolio/optimize", tags=["最优组合"])
-async def optimize_portfolio_api(request: OptimizeRequest):
+async def optimize_portfolio_api(optimize_request: OptimizeRequest, session_id: str = Depends(require_auth)):
     """
     优化求解最大收益组合
 
     在给定可选ETF范围内，使用均值-方差优化寻找最大收益组合。
 
     参数:
-        request: OptimizeRequest，包含可选ETF列表、约束条件和时间区段
+        optimize_request: OptimizeRequest，包含可选ETF列表、约束条件和时间区段
 
     返回:
         最优组合的权重和预期业绩指标
     """
     try:
-        has_constraints = request.max_weight is not None or request.target_volatility is not None
+        has_constraints = optimize_request.max_weight is not None or optimize_request.target_volatility is not None
         if has_constraints:
             result = optimize_with_constraints(
-                etf_codes=request.etf_codes,
-                max_weight=request.max_weight / 100 if request.max_weight is not None else None,
-                target_volatility=request.target_volatility / 100 if request.target_volatility is not None else None,
-                period=request.period,
+                etf_codes=optimize_request.etf_codes,
+                max_weight=optimize_request.max_weight / 100 if optimize_request.max_weight is not None else None,
+                target_volatility=optimize_request.target_volatility / 100 if optimize_request.target_volatility is not None else None,
+                period=optimize_request.period,
             )
         else:
             result = optimize_max_return(
-                etf_codes=request.etf_codes,
-                period=request.period,
+                etf_codes=optimize_request.etf_codes,
+                period=optimize_request.period,
             )
 
         if not result.success:
