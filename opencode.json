@@ -1,5 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "lsp": true,
   "plugin": [
     "opencode-browser"
   ],
@@ -13,5 +14,8 @@
       ],
       "enabled": true
     }
+  },
+  "permission": {
+    "lsp": "allow"
   }
 }
