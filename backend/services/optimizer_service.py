@@ -39,6 +39,7 @@ from backend.services.portfolio_service import (
     calculate_sharpe_ratio,
     evaluate_portfolio,
     get_session,
+    get_annual_factor,
     period_to_days
 )
 
@@ -152,7 +153,8 @@ def portfolio_volatility(weights: np.ndarray, cov_matrix: np.ndarray) -> float:
 
 
 def maximize_return_objective(weights: np.ndarray, returns: np.ndarray,
-                               cov_matrix: np.ndarray, risk_aversion: float) -> float:
+                               cov_matrix: np.ndarray, risk_aversion: float,
+                               annual_factor: int = 252) -> float:
     """
     最大收益优化目标函数
 
@@ -163,23 +165,24 @@ def maximize_return_objective(weights: np.ndarray, returns: np.ndarray,
     参数:
         weights: 权重数组
         returns: 各ETF年化收益率数组
-        cov_matrix: 协方差矩阵
+        cov_matrix: 协方差矩阵（已按日收益率计算）
         risk_aversion: 风险厌恶系数
+        annual_factor: 年化因子（默认252），根据统计时间范围确定
 
     返回:
         float: 目标函数值（最小化）
     """
     p_return = portfolio_return(weights, returns)
-    p_volatility_sq = np.dot(weights.T, np.dot(cov_matrix, weights)) * 252
+    p_volatility_sq = np.dot(weights.T, np.dot(cov_matrix, weights)) * annual_factor
 
     objective = -(p_return - risk_aversion * p_volatility_sq)
     return objective
 
 
 def optimize_max_return(etf_codes: List[str],
-                          session: Optional[Session] = None,
-                          risk_aversion: float = RISK_AVERSION_DEFAULT,
-                          period: Optional[str] = None) -> OptimizationResult:
+                           session: Optional[Session] = None,
+                           risk_aversion: float = RISK_AVERSION_DEFAULT,
+                           period: Optional[str] = None) -> OptimizationResult:
     """
     优化求解最大收益组合
 
@@ -198,6 +201,7 @@ def optimize_max_return(etf_codes: List[str],
         close_session = True
 
     days = period_to_days(period)
+    annual_factor = get_annual_factor(period)
 
     try:
         if len(etf_codes) == 0:
@@ -276,7 +280,7 @@ def optimize_max_return(etf_codes: List[str],
         result = minimize(
             maximize_return_objective,
             initial_weights,
-            args=(np.array(annual_returns), cov_matrix, risk_aversion),
+            args=(np.array(annual_returns), cov_matrix, risk_aversion, annual_factor),
             method='SLSQP',
             bounds=bounds,
             constraints=constraints,
@@ -314,7 +318,7 @@ def optimize_max_return(etf_codes: List[str],
         pf_returns = calculate_returns_from_nav(portfolio_navs)
         total_ret = (portfolio_navs[-1] - portfolio_navs[0]) / portfolio_navs[0]
         expected_return = calculate_annualized_return(total_ret, len(pf_returns))
-        volatility = calculate_volatility(pf_returns)
+        volatility = calculate_volatility(pf_returns, annual_factor)
         sharpe = calculate_sharpe_ratio(expected_return, volatility)
 
         return OptimizationResult(
@@ -365,6 +369,7 @@ def optimize_with_constraints(etf_codes: List[str],
         close_session = True
 
     days = period_to_days(period)
+    annual_factor = get_annual_factor(period)
 
     try:
         if len(etf_codes) == 0:
@@ -431,13 +436,13 @@ def optimize_with_constraints(etf_codes: List[str],
         if target_volatility:
             constraints.append({
                 'type': 'ineq',
-                'fun': lambda w: target_volatility - portfolio_volatility(w, cov_matrix) * np.sqrt(252)
+                'fun': lambda w: target_volatility - portfolio_volatility(w, cov_matrix) * np.sqrt(annual_factor)
             })
 
         result = minimize(
             maximize_return_objective,
             initial_weights,
-            args=(np.array(annual_returns), cov_matrix, 0.0),
+            args=(np.array(annual_returns), cov_matrix, 0.0, annual_factor),
             method='SLSQP',
             bounds=bounds,
             constraints=constraints,
@@ -475,7 +480,7 @@ def optimize_with_constraints(etf_codes: List[str],
         pf_returns = calculate_returns_from_nav(portfolio_navs)
         total_ret = (portfolio_navs[-1] - portfolio_navs[0]) / portfolio_navs[0]
         expected_return = calculate_annualized_return(total_ret, len(pf_returns))
-        volatility = calculate_volatility(pf_returns)
+        volatility = calculate_volatility(pf_returns, annual_factor)
         sharpe = calculate_sharpe_ratio(expected_return, volatility)
 
         return OptimizationResult(

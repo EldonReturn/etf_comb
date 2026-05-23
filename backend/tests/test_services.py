@@ -128,11 +128,11 @@ class TestVolatility:
     """
     测试波动率计算
 
-    验证年化波动率 = 日波动率 * sqrt(252)
+    验证年化波动率 = 日波动率 * sqrt(annual_factor)
     """
 
     @staticmethod
-    def calculate_volatility(daily_returns):
+    def calculate_volatility(daily_returns, annual_factor=252):
         """计算年化波动率（测试用独立实现）"""
         if not daily_returns or len(daily_returns) < 2:
             return 0.0
@@ -141,7 +141,7 @@ class TestVolatility:
         if len(valid_returns) < 2:
             return 0.0
         daily_volatility = np.std(valid_returns, ddof=1)
-        annualized_vol = daily_volatility * np.sqrt(252)
+        annualized_vol = daily_volatility * np.sqrt(annual_factor)
         return annualized_vol
 
     def test_volatility_basic(self):

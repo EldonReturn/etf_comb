@@ -52,6 +52,34 @@ def _parse_period(period: str) -> Tuple[int, str]:
     return num, unit
 
 
+def get_annual_factor(period: Optional[str]) -> int:
+    """
+    根据period返回年化因子（月数）
+
+    按实际统计时间范围计算年化因子，而非固定252个交易日。
+
+    参数:
+        period: 时间区段字符串，如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'
+
+    返回:
+        int: 年化因子（如1m=12, 3m=4, 6m=2, 1y+=1）
+
+    示例:
+        >>> get_annual_factor("1m")
+        12
+        >>> get_annual_factor("3m")
+        4
+        >>> get_annual_factor("1y")
+        1
+    """
+    if not period:
+        return 1
+    num, unit = _parse_period(period)
+    if unit == 'm':
+        return 12 // num
+    return 1
+
+
 def period_to_days(period: Optional[str]) -> int:
     """
     将时间区段字符串转换为精确的天数
@@ -227,15 +255,16 @@ def calculate_annualized_return(total_return: float, days: int) -> float:
     return (1 + total_return) ** (TRADING_DAYS_PER_YEAR / days) - 1
 
 
-def calculate_volatility(daily_returns: List[float]) -> float:
+def calculate_volatility(daily_returns: List[float], annual_factor: int = TRADING_DAYS_PER_YEAR) -> float:
     """
     计算年化波动率
 
     波动率是收益率序列的标准差，反映投资的波动程度。
-    年化波动率 = 日波动率 * sqrt(252)
+    年化波动率 = 日波动率 * sqrt(annual_factor)
 
     参数:
         daily_returns: 日收益率序列
+        annual_factor: 年化因子（默认252），根据统计时间范围确定
 
     返回:
         float: 年化波动率（小数形式）
@@ -255,7 +284,7 @@ def calculate_volatility(daily_returns: List[float]) -> float:
         return 0.0
 
     daily_volatility = np.std(valid_returns, ddof=1)
-    annualized_vol = daily_volatility * np.sqrt(TRADING_DAYS_PER_YEAR)
+    annualized_vol = daily_volatility * np.sqrt(annual_factor)
     return annualized_vol
 
 
@@ -326,7 +355,8 @@ def calculate_max_drawdown(nav_series: List[float]) -> Tuple[float, Optional[str
 def calculate_portfolio_metrics(daily_returns: List[float],
                                    nav_series: List[float],
                                    nav_dates: List[str],
-                                   benchmark_navs: Optional[List[float]] = None) -> PortfolioMetrics:
+                                   benchmark_navs: Optional[List[float]] = None,
+                                   annual_factor: int = TRADING_DAYS_PER_YEAR) -> PortfolioMetrics:
     """
     计算组合完整业绩指标
 
@@ -336,6 +366,7 @@ def calculate_portfolio_metrics(daily_returns: List[float],
         daily_returns: 每日收益率序列
         nav_series: 净值序列
         nav_dates: 净值日期序列
+        annual_factor: 年化因子（默认252），根据统计时间范围确定
 
     返回:
         PortfolioMetrics: 组合业绩指标对象
@@ -360,7 +391,7 @@ def calculate_portfolio_metrics(daily_returns: List[float],
 
     total_return = (nav_series[-1] - nav_series[0]) / nav_series[0]
     annualized_return = calculate_annualized_return(total_return, len(daily_returns))
-    volatility = calculate_volatility(daily_returns)
+    volatility = calculate_volatility(daily_returns, annual_factor)
 
     risk_free_rate = RISK_FREE_RATE
     if benchmark_navs and len(benchmark_navs) >= 2:
@@ -473,7 +504,7 @@ def calculate_single_etf_metrics(session: Session, code: str, name: str,
     daily_returns = calculate_returns_from_nav(nav_series)
     total_return = (nav_series[-1] - nav_series[0]) / nav_series[0]
     annualized_return = calculate_annualized_return(total_return, len(daily_returns))
-    volatility = calculate_volatility(daily_returns)
+    volatility = calculate_volatility(daily_returns, get_annual_factor(period))
     sharpe_ratio = calculate_sharpe_ratio(annualized_return, volatility)
     max_drawdown, _ = calculate_max_drawdown(nav_series)
 
@@ -558,7 +589,7 @@ def evaluate_portfolio(weights: Dict[str, float],
             portfolio_navs.append(portfolio_value)
 
         daily_returns = calculate_returns_from_nav(portfolio_navs)
-        metrics = calculate_portfolio_metrics(daily_returns, portfolio_navs, nav_dates, benchmark_navs)
+        metrics = calculate_portfolio_metrics(daily_returns, portfolio_navs, nav_dates, benchmark_navs, get_annual_factor(period))
 
         etf_metrics = {}
         for i, code in enumerate(valid_codes):
