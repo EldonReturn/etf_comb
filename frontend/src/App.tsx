@@ -50,6 +50,7 @@ const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
 
 function App() {
   const [etfList, setEtfList] = useState<ETFInfo[]>([]);
+  const [etfListLoading, setEtfListLoading] = useState(true);
   const [currentWeights, setCurrentWeights] = useState<Weights>({});
   const [optimizerSelected, setOptimizerSelected] = useState<string[]>([]);
   const [savedPortfolios, setSavedPortfolios] = useState<Weights[]>([]);
@@ -109,7 +110,10 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!frontendLoggedIn) return;
+
     const fetchETFList = async () => {
+      setEtfListLoading(true);
       try {
         const response = await fetch(`/api/etfs?period=${timeRange}`);
         if (response.ok) {
@@ -118,10 +122,12 @@ function App() {
         }
       } catch {
         setEtfList([]);
+      } finally {
+        setEtfListLoading(false);
       }
     };
     fetchETFList();
-  }, [timeRange]);
+  }, [timeRange, frontendLoggedIn]);
 
   useEffect(() => {
     const validCodes = etfList.filter(e => e.has_enough_data !== false).map(e => e.code);
@@ -261,6 +267,15 @@ function App() {
 
   if (!frontendLoggedIn) {
     return <FrontendLogin onLoginSuccess={() => setFrontendLoggedIn(true)} />;
+  }
+
+  if (etfListLoading) {
+    return (
+      <div className="app-loading">
+        <div className="loading-spinner"></div>
+        <p>加载ETF数据中...</p>
+      </div>
+    );
   }
 
   if (isAdminRoute) {
