@@ -368,6 +368,8 @@ async def optimize_portfolio_api(optimize_request: OptimizeRequest, session_id: 
             "expected_return": result.expected_return,
             "volatility": result.volatility,
             "sharpe_ratio": result.sharpe_ratio,
+            "max_drawdown": result.max_drawdown,
+            "iterations": result.iterations,
             "message": result.message,
         }
     except HTTPException:

@@ -267,6 +267,14 @@ export function OptimizerPanel({ availableETFs, onOptimized, timeRange = '1y', s
                       {result.sharpe_ratio.toFixed(4)}
                     </span>
                   </div>
+                  {result.max_drawdown != null && (
+                    <div className="result-metric">
+                      <span className="metric-label">最大回撤</span>
+                      <span className="metric-value">
+                        {result.max_drawdown.toFixed(2)}%
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="result-weights">

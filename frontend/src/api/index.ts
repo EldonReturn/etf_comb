@@ -73,6 +73,8 @@ export interface OptimizationResult {
   volatility: number;
   sharpe_ratio: number;
   message: string;
+  max_drawdown?: number;
+  iterations?: number;
 }
 
 /**

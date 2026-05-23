@@ -663,5 +663,170 @@ class TestEdgeCases:
         assert vol > 0.5
 
 
+class TestPortfolioCDaR:
+    """
+    测试组合 CDaR（条件回撤）计算
+    """
+
+    @staticmethod
+    def portfolio_cdar(weights, aligned_navs, alpha=0.05):
+        """计算 CDaR（测试用独立实现）"""
+        if not aligned_navs or len(weights) == 0:
+            return 0.0
+        n = len(aligned_navs)
+        min_len = len(aligned_navs[0])
+        portfolio_navs = [sum(aligned_navs[j][i] * weights[j] for j in range(n)) for i in range(min_len)]
+        if len(portfolio_navs) < 2:
+            return 0.0
+        rolling_max = np.maximum.accumulate(portfolio_navs)
+        drawdowns = (np.array(portfolio_navs) - rolling_max) / rolling_max
+        worst_n = max(1, int(len(drawdowns) * alpha))
+        sorted_drawdowns = np.sort(drawdowns)
+        return float(np.mean(sorted_drawdowns[:worst_n]))
+
+    def test_cdar_basic(self):
+        """测试基本 CDaR 计算"""
+        navs1 = [1.0, 1.1, 1.05, 0.95, 1.0, 0.90, 0.85, 0.95, 1.0]
+        navs2 = [1.0, 1.05, 1.0, 0.98, 1.02, 0.95, 0.90, 0.92, 1.0]
+        aligned_navs = [navs1, navs2]
+        weights = np.array([0.6, 0.4])
+        cdar = self.portfolio_cdar(weights, aligned_navs)
+        assert cdar < 0
+        assert cdar >= -0.20
+
+    def test_cdar_custom_alpha(self):
+        """测试自定义 alpha"""
+        navs = [1.0, 1.1, 1.05, 0.95, 1.0, 0.90, 0.85, 0.95, 1.0]
+        aligned_navs = [navs]
+        weights = np.array([1.0])
+        cdar_005 = self.portfolio_cdar(weights, [aligned_navs[0]], alpha=0.05)
+        cdar_010 = self.portfolio_cdar(weights, [aligned_navs[0]], alpha=0.10)
+        assert cdar_005 >= cdar_010
+
+    @staticmethod
+    def portfolio_max_drawdown(weights, aligned_navs):
+        if not aligned_navs or len(weights) == 0:
+            return 0.0
+        n = len(aligned_navs)
+        min_len = len(aligned_navs[0])
+        portfolio_navs = [sum(aligned_navs[j][i] * weights[j] for j in range(n)) for i in range(min_len)]
+        if len(portfolio_navs) < 2:
+            return 0.0
+        rolling_max = np.maximum.accumulate(portfolio_navs)
+        drawdowns = (np.array(portfolio_navs) - rolling_max) / rolling_max
+        return float(np.min(drawdowns))
+
+    def test_cdar_ge_mdd(self):
+        """验证 CDaR >= MDD（CDaR 不比 MDD 更负）"""
+        navs1 = [1.0, 1.1, 1.05, 0.95, 1.0]
+        navs2 = [1.0, 1.05, 1.0, 0.98, 1.02]
+        aligned_navs = [navs1, navs2]
+        weights = np.array([0.6, 0.4])
+        cdar = self.portfolio_cdar(weights, aligned_navs)
+        mdd = self.portfolio_max_drawdown(weights, aligned_navs)
+        assert cdar >= mdd
+
+    def test_cdar_empty(self):
+        """测试空输入返回 0"""
+        cdar = self.portfolio_cdar(np.array([]), [])
+        assert cdar == 0.0
+
+    def test_cdar_single_point(self):
+        """测试单点返回 0"""
+        cdar = self.portfolio_cdar(np.array([1.0]), [[1.0, 1.05]])
+        assert cdar == 0.0
+
+
+class TestDrawdownPenalty:
+    """
+    测试回撤二次罚项
+    """
+
+    @staticmethod
+    def drawdown_penalty_objective(weights, returns, cov_matrix, risk_aversion, annual_factor, aligned_navs, gamma, target_mdd):
+        """计算带回撤罚项的目标函数（测试用独立实现）"""
+        p_return = np.dot(weights, returns)
+        p_vol_sq = np.dot(weights.T, np.dot(cov_matrix, weights)) * annual_factor
+        base_obj = -(p_return - risk_aversion * p_vol_sq)
+        if not aligned_navs or len(weights) == 0:
+            cdar = 0.0
+        else:
+            n = len(aligned_navs)
+            min_len = len(aligned_navs[0])
+            portfolio_navs = [sum(aligned_navs[j][i] * weights[j] for j in range(n)) for i in range(min_len)]
+            if len(portfolio_navs) < 2:
+                cdar = 0.0
+            else:
+                rolling_max = np.maximum.accumulate(portfolio_navs)
+                drawdowns = (np.array(portfolio_navs) - rolling_max) / rolling_max
+                worst_n = max(1, int(len(drawdowns) * 0.05))
+                sorted_drawdowns = np.sort(drawdowns)
+                cdar = float(np.mean(sorted_drawdowns[:worst_n]))
+        violation = max(0.0, abs(cdar) - target_mdd)
+        penalty = gamma * violation ** 2
+        return base_obj + penalty
+
+    def test_penalty_zero_when_satisfied(self):
+        """测试 CDaR 满足目标时罚项为 0"""
+        navs = [1.0, 1.05, 1.0, 0.98, 1.02, 1.03, 1.05]
+        aligned_navs = [navs]
+        weights = np.array([1.0])
+        returns = np.array([0.05])
+        cov = np.array([[0.01]])
+        total_obj = self.drawdown_penalty_objective(weights, returns, cov, 0.0, 252, aligned_navs, 1.0, 0.10)
+        base_obj = -np.dot(weights, returns)
+        assert abs(total_obj - base_obj) < 1e-10
+
+    def test_penalty_positive_when_violated(self):
+        """测试 CDaR 超出目标时罚项为正"""
+        navs = [1.0, 1.2, 1.1, 0.9, 0.85]
+        aligned_navs = [navs]
+        weights = np.array([1.0])
+        returns = np.array([0.08])
+        cov = np.array([[0.04]])
+        base_obj = -np.dot(weights, returns)
+        total_obj = self.drawdown_penalty_objective(weights, returns, cov, 0.0, 252, aligned_navs, 2.0, 0.05)
+        penalty = total_obj - base_obj
+        assert penalty > 0
+
+    def test_penalty_scales_with_gamma(self):
+        """测试罚项随 gamma 缩放"""
+        navs = [1.0, 1.2, 1.1, 0.9, 0.85]
+        aligned_navs = [navs]
+        weights = np.array([1.0])
+        returns = np.array([0.08])
+        cov = np.array([[0.04]])
+        total_1 = self.drawdown_penalty_objective(weights, returns, cov, 0.0, 252, aligned_navs, 1.0, 0.05)
+        total_2 = self.drawdown_penalty_objective(weights, returns, cov, 0.0, 252, aligned_navs, 2.0, 0.05)
+        pen_1 = total_1 - (-np.dot(weights, returns))
+        pen_2 = total_2 - (-np.dot(weights, returns))
+        assert pen_2 > pen_1 > 0
+
+
+class TestIterativeDrawdownOptimizer:
+    """
+    测试迭代升温回撤优化器
+    """
+
+    def test_iterations_field_exists(self):
+        """测试 OptimizationResult 有 iterations 字段"""
+        from backend.services.optimizer_service import OptimizationResult
+        result = OptimizationResult(True, {}, 0.0, 0.0, 0.0, "test", max_drawdown=0.0, iterations=3)
+        assert result.iterations == 3
+
+    def test_max_drawdown_field_exists(self):
+        """测试 OptimizationResult 有 max_drawdown 字段"""
+        from backend.services.optimizer_service import OptimizationResult
+        result = OptimizationResult(True, {}, 0.0, 0.0, 0.0, "test", max_drawdown=-12.5, iterations=1)
+        assert result.max_drawdown == -12.5
+
+    def test_default_fields(self):
+        """测试默认值"""
+        from backend.services.optimizer_service import OptimizationResult
+        result = OptimizationResult(True, {}, 0.0, 0.0, 0.0, "test")
+        assert result.max_drawdown == 0.0
+        assert result.iterations == 0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
