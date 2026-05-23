@@ -165,6 +165,11 @@ class OptimizeRequest(BaseModel):
         description="目标波动率上限（可选，百分比形式）",
         example=20.0
     )
+    target_max_drawdown: Optional[float] = Field(
+        None,
+        description="目标最大回撤上限（可选，百分比形式）",
+        example=15.0
+    )
     period: Optional[str] = Field(
         None,
         description="时间区段，如 '1m', '3m', '6m', '1y', '2y', '3y', '5y'",
@@ -339,12 +344,13 @@ async def optimize_portfolio_api(optimize_request: OptimizeRequest, session_id: 
         最优组合的权重和预期业绩指标
     """
     try:
-        has_constraints = optimize_request.max_weight is not None or optimize_request.target_volatility is not None
+        has_constraints = optimize_request.max_weight is not None or optimize_request.target_volatility is not None or optimize_request.target_max_drawdown is not None
         if has_constraints:
             result = optimize_with_constraints(
                 etf_codes=optimize_request.etf_codes,
                 max_weight=optimize_request.max_weight / 100 if optimize_request.max_weight is not None else None,
                 target_volatility=optimize_request.target_volatility / 100 if optimize_request.target_volatility is not None else None,
+                target_max_drawdown=optimize_request.target_max_drawdown if optimize_request.target_max_drawdown is not None else None,
                 period=optimize_request.period,
             )
         else:

@@ -152,6 +152,36 @@ def portfolio_volatility(weights: np.ndarray, cov_matrix: np.ndarray) -> float:
     return np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
 
 
+def portfolio_max_drawdown(weights: np.ndarray, aligned_navs: List[List[float]]) -> float:
+    """
+    计算组合最大回撤
+
+    参数:
+        weights: 权重数组
+        aligned_navs: 对齐后的净值序列列表
+
+    返回:
+        float: 最大回撤值（负值，如 -0.15 表示 -15%）
+    """
+    if not aligned_navs or len(weights) == 0:
+        return 0.0
+
+    n = len(aligned_navs)
+    min_len = len(aligned_navs[0])
+
+    portfolio_navs = []
+    for i in range(min_len):
+        nav = sum(aligned_navs[j][i] * weights[j] for j in range(n))
+        portfolio_navs.append(nav)
+
+    if len(portfolio_navs) < 2:
+        return 0.0
+
+    rolling_max = np.maximum.accumulate(portfolio_navs)
+    drawdowns = (np.array(portfolio_navs) - rolling_max) / rolling_max
+    return float(np.min(drawdowns))
+
+
 def maximize_return_objective(weights: np.ndarray, returns: np.ndarray,
                                cov_matrix: np.ndarray, risk_aversion: float,
                                annual_factor: int = 252) -> float:
@@ -348,6 +378,7 @@ def optimize_max_return(etf_codes: List[str],
 def optimize_with_constraints(etf_codes: List[str],
                                 max_weight: Optional[float] = None,
                                 target_volatility: Optional[float] = None,
+                                target_max_drawdown: Optional[float] = None,
                                 session: Optional[Session] = None,
                                 period: Optional[str] = None) -> OptimizationResult:
     """
@@ -437,6 +468,12 @@ def optimize_with_constraints(etf_codes: List[str],
             constraints.append({
                 'type': 'ineq',
                 'fun': lambda w: target_volatility - portfolio_volatility(w, cov_matrix) * np.sqrt(annual_factor)
+            })
+
+        if target_max_drawdown:
+            constraints.append({
+                'type': 'ineq',
+                'fun': lambda w: target_max_drawdown / 100 + portfolio_max_drawdown(w, aligned_navs)
             })
 
         result = minimize(

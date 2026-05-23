@@ -558,6 +558,84 @@ class TestMetricCalculations:
         assert abs(max_dd - (-0.136)) < 0.01
 
 
+class TestPortfolioMaxDrawdown:
+    """
+    测试组合最大回撤计算
+    """
+
+    @staticmethod
+    def portfolio_max_drawdown(weights, aligned_navs):
+        """计算组合最大回撤（测试用独立实现）"""
+        if not aligned_navs or len(weights) == 0:
+            return 0.0
+
+        n = len(aligned_navs)
+        min_len = len(aligned_navs[0])
+
+        portfolio_navs = []
+        for i in range(min_len):
+            nav = sum(aligned_navs[j][i] * weights[j] for j in range(n))
+            portfolio_navs.append(nav)
+
+        if len(portfolio_navs) < 2:
+            return 0.0
+
+        rolling_max = np.maximum.accumulate(portfolio_navs)
+        drawdowns = (np.array(portfolio_navs) - rolling_max) / rolling_max
+        return float(np.min(drawdowns))
+
+    def test_portfolio_max_drawdown_basic(self):
+        """测试基本组合最大回撤"""
+        aligned_navs = [
+            [1.0, 1.1, 1.05, 0.95, 1.0],
+            [1.0, 1.05, 1.0, 0.98, 1.02]
+        ]
+        weights = np.array([0.6, 0.4])
+        mdd = self.portfolio_max_drawdown(weights, aligned_navs)
+
+        assert mdd < 0
+        assert abs(mdd - (-0.1093)) < 0.01
+
+    def test_portfolio_max_drawdown_single_etf(self):
+        """测试单只ETF组合"""
+        aligned_navs = [[1.0, 1.2, 0.9]]
+        weights = np.array([1.0])
+        mdd = self.portfolio_max_drawdown(weights, aligned_navs)
+
+        assert mdd < 0
+        assert abs(mdd - (-0.25)) < 0.01
+
+    def test_portfolio_max_drawdown_empty(self):
+        """测试空输入"""
+        mdd = self.portfolio_max_drawdown(np.array([]), [])
+        assert mdd == 0.0
+
+    def test_portfolio_max_drawdown_no_drawdown(self):
+        """测试无回撤情况（连续上涨）"""
+        aligned_navs = [
+            [1.0, 1.05, 1.10],
+            [1.0, 1.02, 1.04]
+        ]
+        weights = np.array([0.5, 0.5])
+        mdd = self.portfolio_max_drawdown(weights, aligned_navs)
+
+        assert mdd == 0.0
+
+    def test_portfolio_max_drawdown_two_etf_diversification(self):
+        """测试两只ETF分散化效果"""
+        navs1 = [1.0, 1.1, 1.05, 0.95, 1.0]
+        navs2 = [1.0, 0.95, 1.0, 1.05, 1.1]
+        aligned_navs = [navs1, navs2]
+
+        weights1 = np.array([1.0, 0.0])
+        mdd1 = self.portfolio_max_drawdown(weights1, aligned_navs)
+
+        weights2 = np.array([0.5, 0.5])
+        mdd2 = self.portfolio_max_drawdown(weights2, aligned_navs)
+
+        assert mdd2 >= mdd1
+
+
 class TestEdgeCases:
     """测试边界条件"""
 
@@ -582,7 +660,7 @@ class TestEdgeCases:
         """测试高波动率"""
         returns = [0.10, -0.10, 0.10, -0.10] * 10
         vol = np.std(returns) * np.sqrt(252)
-        assert vol > 0.5  # 波动率应该大于50%
+        assert vol > 0.5
 
 
 if __name__ == "__main__":

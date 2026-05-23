@@ -15,6 +15,7 @@ interface OptimizerPanelProps {
 export function OptimizerPanel({ availableETFs, onOptimized, timeRange = '1y', selectedETFs: externalSelected, onSelectionChange }: OptimizerPanelProps) {
   const [maxWeight, setMaxWeight] = useState<number | undefined>(undefined);
   const [targetVolatility, setTargetVolatility] = useState<number | undefined>(undefined);
+  const [targetMaxDrawdown, setTargetMaxDrawdown] = useState<number | undefined>(undefined);
   const [optimizing, setOptimizing] = useState(false);
   const [result, setResult] = useState<OptimizationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +83,7 @@ export function OptimizerPanel({ availableETFs, onOptimized, timeRange = '1y', s
     setResult(null);
 
     try {
-      const data = await optimizePortfolio(selectedETFs, maxWeight, targetVolatility, timeRange);
+      const data = await optimizePortfolio(selectedETFs, maxWeight, targetVolatility, targetMaxDrawdown, timeRange);
       setResult(data);
 
       if (data.success && data.weights) {
@@ -200,6 +201,24 @@ export function OptimizerPanel({ availableETFs, onOptimized, timeRange = '1y', s
                 value={targetVolatility ?? ''}
                 onChange={(e) =>
                   setTargetVolatility(
+                    e.target.value ? parseFloat(e.target.value) : undefined
+                  )
+                }
+              />
+            </label>
+          </div>
+
+          <div className="constraint-field">
+            <label>
+              目标最大回撤上限 (%)
+              <input
+                type="number"
+                min="0"
+                max="100"
+                placeholder="不限制"
+                value={targetMaxDrawdown ?? ''}
+                onChange={(e) =>
+                  setTargetMaxDrawdown(
                     e.target.value ? parseFloat(e.target.value) : undefined
                   )
                 }

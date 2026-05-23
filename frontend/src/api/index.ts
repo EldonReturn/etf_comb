@@ -188,12 +188,14 @@ export async function comparePortfolios(
  * @param etfCodes 可选ETF代码列表
  * @param maxWeight 单个ETF最大权重
  * @param targetVolatility 目标波动率
+ * @param targetMaxDrawdown 目标最大回撤
  * @param period 时间区段
  */
 export async function optimizePortfolio(
   etfCodes: string[],
   maxWeight?: number,
   targetVolatility?: number,
+  targetMaxDrawdown?: number,
   period?: string
 ): Promise<OptimizationResult> {
   const response = await fetch(`${API_BASE}/portfolio/optimize`, {
@@ -205,6 +207,7 @@ export async function optimizePortfolio(
       etf_codes: etfCodes,
       max_weight: maxWeight,
       target_volatility: targetVolatility,
+      target_max_drawdown: targetMaxDrawdown,
       period,
     }),
   });
