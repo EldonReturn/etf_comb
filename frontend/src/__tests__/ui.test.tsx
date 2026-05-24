@@ -12,7 +12,6 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import App from '../App';
 import { ETFSelector } from '../components/ETFSelector';
 import { PortfolioCard } from '../components/PortfolioCard';
@@ -90,23 +89,9 @@ function mockFetchSuccess(data: unknown, ok = true) {
   });
 }
 
-function mockFetchError() {
-  return Promise.reject(new Error('Network error'));
-}
 
-function mockFetchSequential(...responses: Array<Record<string, unknown>>) {
-  let calls = 0;
-  globalThis.fetch = vi.fn(() => {
-    const resp = responses[Math.min(calls, responses.length - 1)];
-    calls++;
-    return Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve(resp),
-      status: 200,
-      statusText: 'OK',
-    });
-  }) as unknown as typeof fetch;
-}
+
+
 
 // ─── State reset between tests ───────────────────────────────
 

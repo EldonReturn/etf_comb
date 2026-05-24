@@ -7,7 +7,7 @@
  * 3. 用户交互测试
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 /**
  * API类型测试
@@ -82,7 +82,7 @@ describe('Weights Calculation', () => {
     const codes = ['510300', '510500', '159915'];
     const equalWeight = 1 / codes.length;
 
-    codes.forEach((code) => {
+    codes.forEach((_code) => {
       expect(equalWeight).toBeCloseTo(0.333, 2);
     });
   });

@@ -112,7 +112,6 @@ export function PortfolioCard({ weights, id, name, timeRange = '1y', benchmarkCo
       return `${yy}${mm}${dd}`;
     };
     if (navData.length > 0) {
-      const totalLen = safeLen || 1;
       if (navData.length === 1) {
         xLabels.push({
           index: 0,

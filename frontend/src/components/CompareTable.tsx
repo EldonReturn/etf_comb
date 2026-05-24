@@ -27,7 +27,7 @@ interface PortfolioResult extends PortfolioMetrics {
   portfolioName: string;
 }
 
-export function CompareTable({ portfolios, onRemove, timeRange = '1y', benchmarkCode = '510310' }: CompareTableProps) {
+export function CompareTable({ portfolios, onRemove: _onRemove, timeRange = '1y', benchmarkCode = '510310' }: CompareTableProps) {
   const [results, setResults] = useState<PortfolioResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
