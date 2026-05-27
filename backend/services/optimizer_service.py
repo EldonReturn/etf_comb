@@ -224,6 +224,23 @@ def portfolio_max_drawdown(weights: np.ndarray, aligned_navs: List[List[float]])
     return float(np.min(drawdowns))
 
 
+def portfolio_hhi(weights: np.ndarray) -> float:
+    """
+    计算组合权重的 Herfindahl-Hirschman 指数（集中度指标）
+
+    HHI = Σ(wᵢ²)，取值范围 [1/n, 1]。
+    - 等权组合的 HHI = 1/n（n 为资产数量）
+    - 完全集中单资产的 HHI = 1
+
+    参数:
+        weights: 权重数组
+
+    返回:
+        float: HHI 值
+    """
+    return float(np.sum(weights ** 2))
+
+
 def maximize_return_objective(weights: np.ndarray, returns: np.ndarray,
                                cov_matrix: np.ndarray, risk_aversion: float,
                                annual_factor: int = 252) -> float:
@@ -254,14 +271,20 @@ def maximize_return_objective(weights: np.ndarray, returns: np.ndarray,
 def drawdown_penalty_objective(weights: np.ndarray, returns: np.ndarray,
                                cov_matrix: np.ndarray, risk_aversion: float,
                                annual_factor: int, aligned_navs: List[List[float]],
-                               gamma: float, target_mdd: float) -> float:
+                               gamma: float, target_mdd: float,
+                               alpha: float = 0.05,
+                               hhi_target: Optional[float] = None,
+                               gamma_hhi: float = 2.0) -> float:
     """
-    带回撤罚项的优化目标函数
+    带回撤罚项和集中度罚项的优化目标函数
 
-    目标 = -(Σwᵢ × rᵢ) + λ × ΣΣ(wᵢ × wⱼ × σᵢⱼ) + γ × max(0, CDaR(w) - target)²
+    目标 = -(Σwᵢ × rᵢ) + λ × ΣΣ(wᵢ × wⱼ × σᵢⱼ)
+         + γ × max(0, |CDaR(w, α)| - target)²
+         + γ_hhi × max(0, HHI(w) - hhi_target)²
 
-    当 CDaR <= target 时，罚项为 0（约束满足）。
+    当 CDaR <= target 时，回撤罚项为 0（约束满足）。
     当 CDaR > target 时，罚项以二次方增长。
+    HHI 集中度罚项同理，防止权重过度集中于单一资产。
 
     参数:
         weights: 权重数组
@@ -270,16 +293,26 @@ def drawdown_penalty_objective(weights: np.ndarray, returns: np.ndarray,
         risk_aversion: 风险厌恶系数
         annual_factor: 年化因子
         aligned_navs: 对齐后的净值序列列表
-        gamma: 惩罚系数
+        gamma: 回撤惩罚系数
         target_mdd: 目标最大回撤上限（小数形式，如 0.15 表示 15%）
+        alpha: CDaR 尾部比例（默认 0.05）。越小越接近真实最大回撤
+        hhi_target: HHI 集中度上限（默认 None 表示不限制）。0.5 约等于 2 个等权资产
+        gamma_hhi: HHI 惩罚系数（默认 2.0）
 
     返回:
         float: 目标函数值（最小化）
     """
     base_obj = maximize_return_objective(weights, returns, cov_matrix, risk_aversion, annual_factor)
-    cdar = portfolio_cdar(weights, aligned_navs)
+
+    cdar = portfolio_cdar(weights, aligned_navs, alpha=alpha)
     violation = max(0.0, abs(cdar) - target_mdd)
     penalty = gamma * violation ** 2
+
+    if hhi_target is not None:
+        hhi = portfolio_hhi(weights)
+        hhi_violation = max(0.0, hhi - hhi_target)
+        penalty += gamma_hhi * hhi_violation ** 2
+
     return base_obj + penalty
 
 
@@ -424,6 +457,7 @@ def optimize_max_return(etf_codes: List[str],
         expected_return = calculate_annualized_return(total_ret, len(pf_returns))
         volatility = calculate_volatility(pf_returns, annual_factor)
         sharpe = calculate_sharpe_ratio(expected_return, volatility)
+        actual_mdd = portfolio_max_drawdown(optimal_weights, aligned_navs)
 
         return OptimizationResult(
             success=True,
@@ -431,6 +465,7 @@ def optimize_max_return(etf_codes: List[str],
             expected_return=expected_return * 100,
             volatility=volatility * 100,
             sharpe_ratio=sharpe,
+            max_drawdown=actual_mdd * 100,
             message="优化成功"
         )
 
@@ -549,11 +584,17 @@ def optimize_with_drawdown_penalty(etf_codes: List[str],
             result_iterations = iteration
             current_weights = initial_weights if iteration == 1 else optimal_weights
 
+            # 动态缩小 alpha：前几轮用较大的 alpha 保证光滑性，后几轮缩小使 CDaR 逐步逼近真实最大回撤
+            alpha = max(0.01, 0.05 / iteration) if target_max_drawdown is not None else 0.05
+            # HHI 集中度上限：0.5 约等于 2 个等权资产，防止权重过度集中于单一 ETF
+            hhi_target = 0.5 if n >= 3 else 1.0 / n
+
             if target_max_drawdown is not None:
                 def obj_with_penalty(w):
                     return drawdown_penalty_objective(
                         w, np.array(annual_returns), cov_matrix, 0.0, annual_factor,
-                        aligned_navs, gamma, target_max_drawdown
+                        aligned_navs, gamma, target_max_drawdown,
+                        alpha=alpha, hhi_target=hhi_target, gamma_hhi=2.0
                     )
             else:
                 obj_with_penalty = lambda w: maximize_return_objective(
@@ -599,7 +640,7 @@ def optimize_with_drawdown_penalty(etf_codes: List[str],
                         max_drawdown=mdd_pct, iterations=result_iterations
                     )
 
-                cdar_val = portfolio_cdar(opt_w, aligned_navs)
+                cdar_val = portfolio_cdar(opt_w, aligned_navs, alpha=alpha)
                 violation = max(0.0, abs(cdar_val) - target_max_drawdown)
                 if violation < best_mdd_violation:
                     best_mdd_violation = violation

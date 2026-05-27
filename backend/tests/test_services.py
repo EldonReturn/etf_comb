@@ -743,7 +743,7 @@ class TestDrawdownPenalty:
     """
 
     @staticmethod
-    def drawdown_penalty_objective(weights, returns, cov_matrix, risk_aversion, annual_factor, aligned_navs, gamma, target_mdd):
+    def drawdown_penalty_objective(weights, returns, cov_matrix, risk_aversion, annual_factor, aligned_navs, gamma, target_mdd, alpha=0.05, hhi_target=None, gamma_hhi=2.0):
         """计算带回撤罚项的目标函数（测试用独立实现）"""
         p_return = np.dot(weights, returns)
         p_vol_sq = np.dot(weights.T, np.dot(cov_matrix, weights)) * annual_factor
@@ -759,11 +759,16 @@ class TestDrawdownPenalty:
             else:
                 rolling_max = np.maximum.accumulate(portfolio_navs)
                 drawdowns = (np.array(portfolio_navs) - rolling_max) / rolling_max
-                worst_n = max(1, int(len(drawdowns) * 0.05))
+                worst_n = max(1, int(len(drawdowns) * alpha))
                 sorted_drawdowns = np.sort(drawdowns)
                 cdar = float(np.mean(sorted_drawdowns[:worst_n]))
         violation = max(0.0, abs(cdar) - target_mdd)
         penalty = gamma * violation ** 2
+        # HHI 集中度罚项
+        if hhi_target is not None:
+            hhi = float(np.sum(weights ** 2))
+            hhi_violation = max(0.0, hhi - hhi_target)
+            penalty += gamma_hhi * hhi_violation ** 2
         return base_obj + penalty
 
     def test_penalty_zero_when_satisfied(self):
