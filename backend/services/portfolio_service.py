@@ -218,14 +218,12 @@ def calculate_returns_from_nav(nav_series: List[float]) -> List[float]:
     if len(nav_series) < 2:
         return [float('nan')]
 
-    returns = []
-    for i in range(1, len(nav_series)):
-        if nav_series[i-1] != 0:
-            ret = (nav_series[i] - nav_series[i-1]) / nav_series[i-1]
-            returns.append(ret)
-        else:
-            returns.append(float('nan'))
-    return returns
+    arr = np.array(nav_series, dtype=float)
+    prev = arr[:-1]
+    curr = arr[1:]
+    with np.errstate(divide='ignore', invalid='ignore'):
+        returns = (curr - prev) / np.where(prev != 0, prev, np.nan)
+    return returns.tolist()
 
 
 def calculate_annualized_return(total_return: float, days: int) -> float:
@@ -274,11 +272,10 @@ def calculate_volatility(daily_returns: List[float], annual_factor: int = TRADIN
         >>> vol = calculate_volatility(returns)
         >>> print(f"年化波动率: {vol*100:.2f}%")
     """
-    if not daily_returns or len(daily_returns) < 2:
+    if not daily_returns:
         return 0.0
 
-    returns_array = np.array(daily_returns)
-    valid_returns = returns_array[~np.isnan(returns_array)]
+    valid_returns = np.array(daily_returns)[~np.isnan(np.array(daily_returns))]
 
     if len(valid_returns) < 2:
         return 0.0
@@ -319,7 +316,7 @@ def calculate_sharpe_ratio(annualized_return: float, volatility: float,
     return (annualized_return - risk_free_rate) / volatility
 
 
-def calculate_max_drawdown(nav_series: List[float]) -> Tuple[float, Optional[str]]:
+def calculate_max_drawdown(nav_series: List[float], nav_dates: Optional[List[str]] = None) -> Tuple[float, Optional[str]]:
     """
     计算最大回撤
 
@@ -330,6 +327,7 @@ def calculate_max_drawdown(nav_series: List[float]) -> Tuple[float, Optional[str
 
     参数:
         nav_series: 净值序列
+        nav_dates: 净值日期序列（可选）
 
     返回:
         Tuple[float, Optional[str]]: (最大回撤值, 最大回撤发生日期)
@@ -346,10 +344,11 @@ def calculate_max_drawdown(nav_series: List[float]) -> Tuple[float, Optional[str
     df['rolling_max'] = df['nav'].cummax()
     df['drawdown'] = (df['nav'] - df['rolling_max']) / df['rolling_max']
 
-    max_drawdown_idx = df['drawdown'].idxmin()
-    max_drawdown = df.loc[max_drawdown_idx, 'drawdown']
+    max_dd_idx = int(df['drawdown'].idxmin())
+    max_drawdown = df.loc[max_dd_idx, 'drawdown']
+    max_dd_date = nav_dates[max_dd_idx] if nav_dates and max_dd_idx < len(nav_dates) else None
 
-    return max_drawdown, None
+    return max_drawdown, max_dd_date
 
 
 def calculate_portfolio_metrics(daily_returns: List[float],
@@ -400,7 +399,7 @@ def calculate_portfolio_metrics(daily_returns: List[float],
         risk_free_rate = max(0, benchmark_ann_return)
 
     sharpe_ratio = calculate_sharpe_ratio(annualized_return, volatility, risk_free_rate)
-    max_drawdown, max_dd_date = calculate_max_drawdown(nav_series)
+    max_drawdown, max_dd_date = calculate_max_drawdown(nav_series, nav_dates)
 
     return PortfolioMetrics(
         total_return=total_return * 100,
@@ -414,6 +413,23 @@ def calculate_portfolio_metrics(daily_returns: List[float],
         nav_dates=nav_dates,
         holding_period=len(nav_series)
     )
+
+
+def _query_etf_nav_records(session: Session, code: str, days: int = 365) -> List[ETFNavHistory]:
+    """Query ETF NAV history records from DB (used by get_etf_nav_series/get_etf_nav_dates)."""
+    end_date = date.today()
+    start_date = end_date - timedelta(days=days)
+    return session.query(ETFNavHistory).filter(
+        ETFNavHistory.etf_code == code,
+        ETFNavHistory.nav_date >= start_date,
+        ETFNavHistory.nav_date <= end_date
+    ).order_by(ETFNavHistory.nav_date).all()
+
+
+def _get_etf_name(session: Session, code: str) -> str:
+    """Query ETF name from DB; returns code if not found."""
+    record = session.query(ETFNavHistory).filter(ETFNavHistory.etf_code == code).first()
+    return record.etf_info.name if record and record.etf_info else code
 
 
 def get_etf_nav_series(session: Session, code: str, days: int = 365) -> List[float]:
@@ -432,15 +448,7 @@ def get_etf_nav_series(session: Session, code: str, days: int = 365) -> List[flo
         >>> with get_session() as session:
         >>>     navs = get_etf_nav_series(session, "510300", 365)
     """
-    end_date = date.today()
-    start_date = end_date - timedelta(days=days)
-
-    records = session.query(ETFNavHistory).filter(
-        ETFNavHistory.etf_code == code,
-        ETFNavHistory.nav_date >= start_date,
-        ETFNavHistory.nav_date <= end_date
-    ).order_by(ETFNavHistory.nav_date).all()
-
+    records = _query_etf_nav_records(session, code, days)
     return [float(r.accum_nav) for r in records]
 
 
@@ -460,15 +468,7 @@ def get_etf_nav_dates(session: Session, code: str, days: int = 365) -> List[str]
         >>> with get_session() as session:
         >>>     dates = get_etf_nav_dates(session, "510300", 365)
     """
-    end_date = date.today()
-    start_date = end_date - timedelta(days=days)
-
-    records = session.query(ETFNavHistory).filter(
-        ETFNavHistory.etf_code == code,
-        ETFNavHistory.nav_date >= start_date,
-        ETFNavHistory.nav_date <= end_date
-    ).order_by(ETFNavHistory.nav_date).all()
-
+    records = _query_etf_nav_records(session, code, days)
     return [r.nav_date.isoformat() for r in records]
 
 
@@ -488,6 +488,7 @@ def calculate_single_etf_metrics(session: Session, code: str, name: str,
     """
     days = period_to_days(period)
     nav_series = get_etf_nav_series(session, code, days)
+    nav_dates = get_etf_nav_dates(session, code, days)
 
     if len(nav_series) < 2:
         return SingleETFFMetrics(
@@ -506,7 +507,7 @@ def calculate_single_etf_metrics(session: Session, code: str, name: str,
     annualized_return = calculate_annualized_return(total_return, len(daily_returns))
     volatility = calculate_volatility(daily_returns, get_annual_factor(period))
     sharpe_ratio = calculate_sharpe_ratio(annualized_return, volatility)
-    max_drawdown, _ = calculate_max_drawdown(nav_series)
+    max_drawdown, _ = calculate_max_drawdown(nav_series, nav_dates)
 
     return SingleETFFMetrics(
         code=code,
@@ -537,10 +538,10 @@ def evaluate_portfolio(weights: Dict[str, float],
     返回:
         Dict: 组合业绩指标字典
     """
-    close_session = False
+    own_session = None
     if session is None:
-        session = get_session().__enter__()
-        close_session = True
+        own_session = get_session().__enter__()
+        session = own_session
 
     days = period_to_days(period)
 
@@ -571,12 +572,12 @@ def evaluate_portfolio(weights: Dict[str, float],
                 "etf_metrics": {}
             }
 
-        nav_dates = get_etf_nav_dates(session, valid_codes[0], days)[-len(etf_navs_list[0]):] if etf_navs_list else []
+        nav_dates = get_etf_nav_dates(session, valid_codes[0], days)[-len(etf_navs_list[0]):] if etf_navs_list else []  # defensive: guards against inconsistent data length; NOP when aligned
         benchmark_etf = benchmark_code or BENCHMARK_ETF_CODE
-        benchmark_navs_raw = get_etf_nav_series(session, benchmark_etf, days) if len(valid_codes) > 0 else []
+        benchmark_navs_raw = get_etf_nav_series(session, benchmark_etf, days) if valid_codes else []
         min_len = min(len(navs) for navs in etf_navs_list) if etf_navs_list else 0
-        benchmark_navs = benchmark_navs_raw[-min_len:] if len(benchmark_navs_raw) >= min_len else benchmark_navs_raw
-        nav_dates = nav_dates[-min_len:] if len(nav_dates) >= min_len else nav_dates
+        benchmark_navs = benchmark_navs_raw[max(0, len(benchmark_navs_raw)-min_len):]
+        nav_dates = nav_dates[max(0, len(nav_dates)-min_len):]
 
         normalized_navs_list = [navs[-min_len:] for navs in etf_navs_list]
 
@@ -602,12 +603,9 @@ def evaluate_portfolio(weights: Dict[str, float],
             etf_ann_ret = calculate_annualized_return(etf_total_ret, len(etf_returns))
             etf_vol = calculate_volatility(etf_returns)
             etf_sharpe = calculate_sharpe_ratio(etf_ann_ret, etf_vol)
-            etf_mdd, _ = calculate_max_drawdown(nav_data)
+            etf_mdd, _ = calculate_max_drawdown(nav_data, nav_dates)
 
-            etf_info_record = session.query(ETFNavHistory).filter(
-                ETFNavHistory.etf_code == code
-            ).first()
-            name = etf_info_record.etf_info.name if etf_info_record and etf_info_record.etf_info else code
+            name = _get_etf_name(session, code)
 
             etf_metrics[code] = {
                 "code": code,
@@ -620,10 +618,7 @@ def evaluate_portfolio(weights: Dict[str, float],
                 "max_drawdown": etf_mdd * 100
             }
 
-        benchmark_record = session.query(ETFNavHistory).filter(
-            ETFNavHistory.etf_code == benchmark_etf
-        ).first()
-        benchmark_name = benchmark_record.etf_info.name if benchmark_record and benchmark_record.etf_info else benchmark_etf
+        benchmark_name = _get_etf_name(session, benchmark_etf)
 
         return {
             "total_return": metrics.total_return,
@@ -641,8 +636,8 @@ def evaluate_portfolio(weights: Dict[str, float],
             "etf_metrics": etf_metrics
         }
     finally:
-        if close_session:
-            session.close()
+        if own_session is not None:
+            own_session.close()
 
 
 def compare_portfolios(portfolios: List[Dict[str, float]],
