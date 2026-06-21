@@ -1,0 +1,24 @@
+{
+  "include": ["backend"],
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": ["."]
+    }
+  ],
+  "venv": ".venv",
+  "venvPath": ".",
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic",
+  "reportMissingTypeStubs": false,
+  "reportUnknownMemberType": false,
+  "reportUnknownVariableType": false,
+  "reportUnknownArgumentType": false,
+  "reportUnknownParameterType": false,
+  "reportUnknownLambdaType": false,
+  "reportMissingParameterType": false,
+  "reportAny": false,
+  "reportUnusedImport": false,
+  "reportDeprecated": false,
+  "reportPrivateLocalImportUsage": false
+}

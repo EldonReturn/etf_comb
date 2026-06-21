@@ -344,7 +344,8 @@ def calculate_max_drawdown(nav_series: List[float], nav_dates: Optional[List[str
     df['rolling_max'] = df['nav'].cummax()
     df['drawdown'] = (df['nav'] - df['rolling_max']) / df['rolling_max']
 
-    max_dd_idx = int(df['drawdown'].idxmin())
+    idx = df['drawdown'].idxmin()
+    max_dd_idx = int(idx)  # type: ignore[reportArgumentType]
     max_drawdown = df.loc[max_dd_idx, 'drawdown']
     max_dd_date = nav_dates[max_dd_idx] if nav_dates and max_dd_idx < len(nav_dates) else None
 
@@ -472,6 +473,51 @@ def get_etf_nav_dates(session: Session, code: str, days: int = 365) -> List[str]
     return [r.nav_date.isoformat() for r in records]
 
 
+def check_etf_dates_aligned(session: Session, codes: List[str], days: int) -> Optional[str]:
+    """
+    检查多个 ETF 的净值日期范围是否基本对齐
+
+    如果某只 ETF 的数据长度明显短于其他 ETF（不足最长者的 90%），
+    说明该 ETF 上市时间较短，直接做 min_len 截断会裁剪掉其他 ETF 的大量历史数据，
+    可能导致回测时段大幅缩水，跳过大跌时段。
+
+    返回:
+        None: 日期基本对齐，可以安全计算
+        str: 告警文本，说明哪些 ETF 数据不足
+    """
+    if len(codes) < 2:
+        return None
+
+    data_info = []
+    for code in codes:
+        navs = get_etf_nav_series(session, code, days)
+        if navs:
+            data_info.append((code, len(navs)))
+
+    if len(data_info) < 2:
+        return None
+
+    max_len = max(d[1] for d in data_info)
+    min_len = min(d[1] for d in data_info)
+
+    # 最短不足最长的 90%，认为不对齐
+    if max_len > 0 and min_len / max_len < 0.9:
+        short_etfs = [(code, cnt) for code, cnt in data_info if cnt < max_len * 0.9]
+        long_etfs = [(code, cnt) for code, cnt in data_info if cnt >= max_len * 0.9]
+
+        short_info = "、".join(f"{code}({cnt}条)" for code, cnt in short_etfs)
+        long_info = "、".join(f"{code}({cnt}条)" for code, cnt in long_etfs)
+
+        return (
+            f"ETF 数据长度不一致，继续计算将截断回测时段。\n"
+            f"数据较短: {short_info}\n"
+            f"数据较长: {long_info}\n"
+            f"建议: 剔除数据不足的 ETF，或缩短回测周期。"
+        )
+
+    return None
+
+
 def calculate_single_etf_metrics(session: Session, code: str, name: str,
                                   period: Optional[str] = None) -> SingleETFFMetrics:
     """
@@ -524,7 +570,7 @@ def calculate_single_etf_metrics(session: Session, code: str, name: str,
 def evaluate_portfolio(weights: Dict[str, float],
                         session: Optional[Session] = None,
                         period: Optional[str] = None,
-                        benchmark_code: Optional[str] = None) -> Dict:
+                        benchmark_code: Optional[str] = None) -> dict:
     """
     评估组合业绩
 
@@ -543,11 +589,18 @@ def evaluate_portfolio(weights: Dict[str, float],
         own_session = get_session().__enter__()
         session = own_session
 
+    assert session is not None
+
     days = period_to_days(period)
 
     try:
         etf_codes_all = list(weights.keys())
         etf_weights_all = list(weights.values())
+
+        # 检查 ETF 日期是否对齐，避免数据不足的 ETF 裁剪回测时段
+        warning = check_etf_dates_aligned(session, etf_codes_all, days)
+        if warning:
+            raise ValueError(warning)
 
         etf_navs_list = []
         valid_codes = []
@@ -579,7 +632,7 @@ def evaluate_portfolio(weights: Dict[str, float],
         benchmark_navs = benchmark_navs_raw[max(0, len(benchmark_navs_raw)-min_len):]
         nav_dates = nav_dates[max(0, len(nav_dates)-min_len):]
 
-        normalized_navs_list = [navs[-min_len:] for navs in etf_navs_list]
+        normalized_navs_list = [[v / navs[0] for v in navs[-min_len:]] for navs in etf_navs_list]
 
         portfolio_navs = []
         for i in range(min_len):

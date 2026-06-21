@@ -69,7 +69,10 @@ export function PortfolioCard({ weights, id, name, timeRange = '1y', benchmarkCo
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ weights, period: timeRange, benchmark_code: benchmarkCode }),
         });
-        if (!response.ok) throw new Error('评估失败');
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.detail || '评估失败');
+        }
         const data = await response.json();
         setMetrics(data);
       } catch (err) {

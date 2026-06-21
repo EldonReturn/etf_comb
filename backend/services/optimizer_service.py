@@ -40,7 +40,8 @@ from backend.services.portfolio_service import (
     evaluate_portfolio,
     get_session,
     get_annual_factor,
-    period_to_days
+    period_to_days,
+    check_etf_dates_aligned
 )
 
 logger = logging.getLogger(__name__)
@@ -361,6 +362,10 @@ def optimize_max_return(etf_codes: List[str],
                 message="只有一只ETF，权重为100%"
             )
 
+        warning = check_etf_dates_aligned(session, etf_codes, days)
+        if warning:
+            return OptimizationResult(success=False, weights={}, expected_return=0.0, volatility=0.0, sharpe_ratio=0.0, message=warning)
+
         navs_list = []
         valid_codes = []
         for code in etf_codes:
@@ -389,7 +394,7 @@ def optimize_max_return(etf_codes: List[str],
             )
 
         min_len = min(len(navs) for navs in navs_list)
-        aligned_navs = [navs[-min_len:] for navs in navs_list]
+        aligned_navs = [[v / navs[0] for v in navs[-min_len:]] for navs in navs_list]
 
         returns_list = [calculate_returns_from_nav(navs) for navs in aligned_navs]
 
@@ -480,7 +485,7 @@ def optimize_max_return(etf_codes: List[str],
             message=f"优化出错: {str(e)}"
         )
     finally:
-        if close_session:
+        if close_session and session is not None:
             session.close()
 
 
@@ -530,6 +535,10 @@ def optimize_with_drawdown_penalty(etf_codes: List[str],
                 max_drawdown=0.0, iterations=0
             )
 
+        warning = check_etf_dates_aligned(session, etf_codes, days)
+        if warning:
+            return OptimizationResult(success=False, weights={}, expected_return=0.0, volatility=0.0, sharpe_ratio=0.0, message=warning, max_drawdown=0.0, iterations=0)
+
         navs_list = []
         valid_codes = []
         for code in etf_codes:
@@ -546,7 +555,7 @@ def optimize_with_drawdown_penalty(etf_codes: List[str],
             )
 
         min_len = min(len(navs) for navs in navs_list)
-        aligned_navs = [navs[-min_len:] for navs in navs_list]
+        aligned_navs = [[v / navs[0] for v in navs[-min_len:]] for navs in navs_list]
 
         returns_list = [calculate_returns_from_nav(navs) for navs in aligned_navs]
 
@@ -617,7 +626,7 @@ def optimize_with_drawdown_penalty(etf_codes: List[str],
 
                 if target_max_drawdown is not None and abs(actual_mdd) <= target_max_drawdown * 1.01:
                     mdd_pct = actual_mdd * 100
-                    portfolio_navs = [sum(aligned_navs[j][i] * opt_w[j] for j in range(n)) for i in range(min_len)]
+                    portfolio_navs = [float(sum(aligned_navs[j][i] * opt_w[j] for j in range(n))) for i in range(min_len)]
                     pf_returns = calculate_returns_from_nav(portfolio_navs)
                     total_ret = (portfolio_navs[-1] - portfolio_navs[0]) / portfolio_navs[0]
                     expected_ret = calculate_annualized_return(total_ret, len(pf_returns))
@@ -641,7 +650,8 @@ def optimize_with_drawdown_penalty(etf_codes: List[str],
                     )
 
                 cdar_val = portfolio_cdar(opt_w, aligned_navs, alpha=alpha)
-                violation = max(0.0, abs(cdar_val) - target_max_drawdown)
+                tdd = target_max_drawdown or 0.0
+                violation = max(0.0, abs(cdar_val) - tdd)
                 if violation < best_mdd_violation:
                     best_mdd_violation = violation
                     best_result = opt_w
@@ -699,7 +709,7 @@ def optimize_with_drawdown_penalty(etf_codes: List[str],
             max_drawdown=0.0, iterations=0
         )
     finally:
-        if close_session:
+        if close_session and session is not None:
             session.close()
 
 
@@ -751,6 +761,10 @@ def optimize_with_constraints(etf_codes: List[str],
                 message="只有一只ETF，权重为100%"
             )
 
+        warning = check_etf_dates_aligned(session, etf_codes, days)
+        if warning:
+            return OptimizationResult(success=False, weights={}, expected_return=0.0, volatility=0.0, sharpe_ratio=0.0, message=warning)
+
         navs_list = []
         valid_codes = []
         for code in etf_codes:
@@ -770,7 +784,7 @@ def optimize_with_constraints(etf_codes: List[str],
             )
 
         min_len = min(len(navs) for navs in navs_list)
-        aligned_navs = [navs[-min_len:] for navs in navs_list]
+        aligned_navs = [[v / navs[0] for v in navs[-min_len:]] for navs in navs_list]
 
         returns_list = [calculate_returns_from_nav(navs) for navs in aligned_navs]
 
@@ -878,7 +892,7 @@ def optimize_with_constraints(etf_codes: List[str],
             iterations=0
         )
     finally:
-        if close_session:
+        if close_session and session is not None:
             session.close()
 
 

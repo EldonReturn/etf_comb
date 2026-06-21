@@ -158,7 +158,8 @@ export async function evaluatePortfolio(weights: Weights, period?: string): Prom
     body: JSON.stringify({ weights, period }),
   });
   if (!response.ok) {
-    throw new Error(`评估组合失败: ${response.statusText}`);
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.detail || `评估组合失败: ${response.statusText}`);
   }
   return response.json();
 }
@@ -214,7 +215,8 @@ export async function optimizePortfolio(
     }),
   });
   if (!response.ok) {
-    throw new Error(`优化组合失败: ${response.statusText}`);
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.detail || `优化组合失败: ${response.statusText}`);
   }
   return response.json();
 }
